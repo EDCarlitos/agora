@@ -1,17 +1,3 @@
-enum ReportType {
-  incidencia,
-  objetoPerdido;
-
-  String get displayName {
-    switch (this) {
-      case ReportType.incidencia:
-        return 'Incidencia';
-      case ReportType.objetoPerdido:
-        return 'Objeto Perdido';
-    }
-  }
-}
-
 enum ReportStatus {
   pendiente,
   enProceso,
@@ -49,15 +35,14 @@ enum ReportArea {
 class Report {
   final String id;
   final String title; // Nombre del reporte
-  final ReportArea? area; // Area (sistema, limpieza, mantenimiento) - null for lost objects if not applicable
+  final ReportArea? area; // Area (sistema, limpieza, mantenimiento)
   final String classroom; // Aula
   final String building; // Edificio
   final DateTime dateTime; // Hora y fecha
   final String details; // Detalles del reporte
-  final ReportType type; // Tipo de reporte (incidencia / objeto)
   final ReportStatus status;
   final String reportedBy;
-  final String? imageUrl; // Mock image indicator or assets
+  final String? imageUrl; // Reference image URL
 
   const Report({
     required this.id,
@@ -67,7 +52,6 @@ class Report {
     required this.building,
     required this.dateTime,
     required this.details,
-    required this.type,
     required this.status,
     required this.reportedBy,
     this.imageUrl,
@@ -81,7 +65,6 @@ class Report {
     String? building,
     DateTime? dateTime,
     String? details,
-    ReportType? type,
     ReportStatus? status,
     String? reportedBy,
     String? imageUrl,
@@ -94,7 +77,6 @@ class Report {
       building: building ?? this.building,
       dateTime: dateTime ?? this.dateTime,
       details: details ?? this.details,
-      type: type ?? this.type,
       status: status ?? this.status,
       reportedBy: reportedBy ?? this.reportedBy,
       imageUrl: imageUrl ?? this.imageUrl,

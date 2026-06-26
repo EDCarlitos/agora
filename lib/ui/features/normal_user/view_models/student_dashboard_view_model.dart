@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/report.dart';
+import '../../../../data/services/local_database_service.dart';
 
 class StudentDashboardViewModel extends ChangeNotifier {
-  // In-memory list of reports preloaded to match the user's image reference
+  final LocalDatabaseService _db = LocalDatabaseService();
+
+  // In-memory list of reports initialized with working picsum.photos images
   final List<Report> _reports = [
     Report(
       id: 'r1',
@@ -12,9 +15,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio de Ingeniería',
       dateTime: DateTime.now().subtract(const Duration(minutes: 45)),
       details: 'El proyector muestra pantalla azul y dice "Sin Señal" al conectar el cable HDMI.',
-      type: ReportType.incidencia,
       status: ReportStatus.pendiente,
       reportedBy: 'Carlos Estudiante',
+      imageUrl: 'https://picsum.photos/id/870/600/400', // Verified working ID
     ),
     Report(
       id: 'r2',
@@ -24,9 +27,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio A',
       dateTime: DateTime.now().subtract(const Duration(hours: 1)),
       details: 'La lámpara fluorescente del centro parpadea constantemente interrumpiendo la clase.',
-      type: ReportType.incidencia,
       status: ReportStatus.pendiente,
       reportedBy: 'Carlos Estudiante',
+      imageUrl: 'https://picsum.photos/id/250/600/400',
     ),
     Report(
       id: 'r3',
@@ -36,9 +39,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio Central',
       dateTime: DateTime.now().subtract(const Duration(hours: 2)),
       details: 'Se cayó un termo de café en el pasillo principal y está resbaloso.',
-      type: ReportType.incidencia,
       status: ReportStatus.enProceso,
       reportedBy: 'Ana Estudiante',
+      imageUrl: 'https://picsum.photos/id/1084/600/400',
     ),
     Report(
       id: 'r4',
@@ -48,9 +51,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio A',
       dateTime: DateTime.now().subtract(const Duration(days: 1)),
       details: 'Falta papel higiénico y limpieza general en los cubículos de caballeros.',
-      type: ReportType.incidencia,
       status: ReportStatus.pendiente,
       reportedBy: 'Carlos Estudiante',
+      imageUrl: 'https://picsum.photos/id/364/600/400',
     ),
     Report(
       id: 'r5',
@@ -60,9 +63,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio Central',
       dateTime: DateTime.now().subtract(const Duration(hours: 4)),
       details: 'La red UPQROO_Alumnos no permite conectarse ni asigna dirección IP.',
-      type: ReportType.incidencia,
       status: ReportStatus.pendiente,
       reportedBy: 'Sofia Estudiante',
+      imageUrl: 'https://picsum.photos/id/60/600/400',
     ),
     Report(
       id: 'r6',
@@ -72,9 +75,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio Central',
       dateTime: DateTime.now().subtract(const Duration(days: 2)),
       details: 'Una de las patas de madera de la mesa redonda del fondo está desprendida.',
-      type: ReportType.incidencia,
       status: ReportStatus.resuelto,
       reportedBy: 'Pedro Alumno',
+      imageUrl: 'https://picsum.photos/id/20/600/400',
     ),
     Report(
       id: 'r7',
@@ -84,31 +87,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: 'Edificio A',
       dateTime: DateTime.now().subtract(const Duration(days: 3)),
       details: 'El minisplit del salón gotea agua directamente sobre las bancas de la primera fila.',
-      type: ReportType.incidencia,
       status: ReportStatus.pendiente,
       reportedBy: 'Carlos Estudiante',
-    ),
-    Report(
-      id: 'r8',
-      title: 'Audífonos Bluetooth Negros',
-      classroom: 'Laboratorio de Cómputo 2',
-      building: 'Edificio C',
-      dateTime: DateTime.now().subtract(const Duration(hours: 5)),
-      details: 'Audífonos inalámbricos marca JBL negros, olvidados al lado del monitor 12.',
-      type: ReportType.objetoPerdido,
-      status: ReportStatus.pendiente,
-      reportedBy: 'Carlos Estudiante',
-    ),
-    Report(
-      id: 'r9',
-      title: 'Libro de Cálculo Thomas',
-      classroom: 'Cubículos de estudio',
-      building: 'Biblioteca',
-      dateTime: DateTime.now().subtract(const Duration(days: 1)),
-      details: 'Pasta blanda, decimocuarta edición, tiene mi nombre escrito en la primera página.',
-      type: ReportType.objetoPerdido,
-      status: ReportStatus.enProceso,
-      reportedBy: 'Carlos Estudiante',
+      imageUrl: 'https://picsum.photos/id/370/600/400',
     ),
   ];
 
@@ -123,13 +104,6 @@ class StudentDashboardViewModel extends ChangeNotifier {
     },
     {
       'id': 'n2',
-      'title': 'Objeto Encontrado',
-      'body': 'Se ha entregado un libro de cálculo en administración que coincide con tu reporte.',
-      'time': 'Hace 2 horas',
-      'isRead': false,
-    },
-    {
-      'id': 'n3',
       'title': 'Reporte Resuelto',
       'body': 'La "Mesa de trabajo rota" en Biblioteca ha sido reparada.',
       'time': 'Ayer',
@@ -144,13 +118,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
 
   /// Returns only incidents
   List<Report> get incidents {
-    return _reports.where((r) => r.type == ReportType.incidencia).toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-  }
-
-  /// Returns only lost objects
-  List<Report> get lostObjects {
-    return _reports.where((r) => r.type == ReportType.objetoPerdido).toList()
+    return _reports
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
   }
 
@@ -160,7 +128,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
   }
 
-  /// Adds a new report (Incident or Lost Object)
+  /// Adds a new report and saves it to local SQLite database as well
   Future<void> addReport({
     required String title,
     ReportArea? area,
@@ -168,7 +136,6 @@ class StudentDashboardViewModel extends ChangeNotifier {
     required String building,
     required DateTime dateTime,
     required String details,
-    required ReportType type,
     required String reportedBy,
     String? imageUrl,
   }) async {
@@ -185,14 +152,21 @@ class StudentDashboardViewModel extends ChangeNotifier {
       building: building.trim(),
       dateTime: dateTime,
       details: details.trim(),
-      type: type,
       status: ReportStatus.pendiente,
       reportedBy: reportedBy,
       imageUrl: imageUrl,
     );
 
+    // Save in RAM
     _reports.insert(0, newReport);
     
+    // Save in Local DB (SQLite via sqflite)
+    try {
+      await _db.saveIncident(newReport);
+    } catch (e) {
+      debugPrint('Error al guardar en base de datos local: $e');
+    }
+
     // Auto-generate a local notification for report creation
     notifications.insert(0, {
       'id': 'n${notifications.length + 1}',

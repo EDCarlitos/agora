@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
+import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
 
@@ -30,8 +32,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   void _onItemTapped(int index) {
-    if (index == 2) {
-      // The "+" tab opens the creation form dialog directly
+    if (index == 1) {
+      // Tap index 1 triggers report creation form
       _openCreateReportDialog();
     } else {
       setState(() {
@@ -47,16 +49,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       backgroundColor: Colors.transparent,
       builder: (context) => CreateReportBottomSheet(
         reportedBy: widget.user.name,
-        onReportCreated: (title, type, area, classroom, building, details) async {
+        onReportCreated: (title, area, classroom, building, details, imageUrl) async {
           await _viewModel.addReport(
             title: title,
-            type: type,
             area: area,
             classroom: classroom,
             building: building,
             dateTime: DateTime.now(),
             details: details,
             reportedBy: widget.user.name,
+            imageUrl: imageUrl,
           );
         },
       ),
@@ -126,11 +128,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   void _showReportDetail(Report report) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ReportDetailBottomSheet(report: report),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReportDetailView(report: report),
+      ),
     );
   }
 
@@ -139,26 +141,21 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Filter screens depending on selection index
     Widget bodyWidget;
     switch (_selectedIndex) {
       case 0:
         bodyWidget = _buildIncidenciasTab();
         break;
-      case 1:
-        bodyWidget = _buildObjetosTab();
-        break;
-      case 3:
+      case 2:
         bodyWidget = _buildChatTab();
         break;
-      case 4:
+      case 3:
         bodyWidget = _buildCuentaTab();
         break;
       default:
         bodyWidget = _buildIncidenciasTab();
     }
 
-    // Number of unread notifications
     final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
 
     return Scaffold(
@@ -245,11 +242,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               label: 'Incidencias',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.search_rounded),
-              activeIcon: Icon(Icons.manage_search_rounded),
-              label: 'Objetos',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Icons.add_circle, size: 36, color: AppTheme.primaryColor),
               label: 'Agregar',
             ),
@@ -269,12 +261,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // TAB 1: INCIDENCIAS
   Widget _buildIncidenciasTab() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Filters for UI display based on categories
     final listLimpieza = _viewModel.incidents.where((r) => r.area == ReportArea.limpieza).toList();
     final listSistemas = _viewModel.incidents.where((r) => r.area == ReportArea.sistema).toList();
     final listMantenimiento = _viewModel.incidents.where((r) => r.area == ReportArea.mantenimiento).toList();
@@ -283,11 +273,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. HEADER SECTION: Reportes Recientes (Dark header row)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF140D09) : const Color(0xFF33261C), // Deep brown color
+              color: isDark ? const Color(0xFF140D09) : const Color(0xFF33261C),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,12 +298,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       TextButton(
                         onPressed: () {
                           setState(() {
-                            _selectedIndex = 4; // Redirect to Cuenta to view all
+                            _selectedIndex = 3; // Swapped to account tab index (3 instead of 4)
                           });
                         },
                         child: const Text(
                           'Ver todos',
-                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 13), // Yellow accent
+                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 13),
                         ),
                       ),
                     ],
@@ -337,13 +326,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
 
-          // 2. CATEGORIES SECTIONS
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Limpieza Section
                 _buildSectionHeader('Limpieza'),
                 const SizedBox(height: 8),
                 if (listLimpieza.isEmpty)
@@ -356,7 +343,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
                 const SizedBox(height: 20),
 
-                // Sistemas Section
                 _buildSectionHeader('Sistemas'),
                 const SizedBox(height: 8),
                 if (listSistemas.isEmpty)
@@ -369,7 +355,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
                 const SizedBox(height: 20),
 
-                // Mantenimiento Section
                 _buildSectionHeader('Mantenimiento'),
                 const SizedBox(height: 8),
                 if (listMantenimiento.isEmpty)
@@ -387,100 +372,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // TAB 2: OBJETOS
-  Widget _buildObjetosTab() {
-    final theme = Theme.of(context);
-    final objects = _viewModel.lostObjects;
-
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Objetos Perdidos',
-                  style: TextStyle(
-                    fontFamily: 'Georgia',
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.secondaryColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Si encontraste o perdiste algo en el campus, publícalo aquí.',
-                  style: TextStyle(color: theme.hintColor, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (objects.isEmpty)
-          const SliverFillRemaining(
-            child: Center(
-              child: Text('No hay reportes de objetos perdidos.'),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final obj = objects[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(12),
-                      leading: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
-                      ),
-                      title: Text(
-                        obj.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_outlined, size: 13, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('${obj.building} - ${obj.classroom}', style: const TextStyle(fontSize: 12)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      trailing: Text(
-                        '${obj.dateTime.day}/${obj.dateTime.month}',
-                        style: TextStyle(color: theme.hintColor, fontSize: 11),
-                      ),
-                      onTap: () => _showReportDetail(obj),
-                    ),
-                  );
-                },
-                childCount: objects.length,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // TAB 3: CHAT (STUB)
   Widget _buildChatTab() {
-    final theme = Theme.of(context);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -565,7 +457,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // TAB 4: CUENTA (PROFILE + VER MIS REPORTES + LOGOUT)
   Widget _buildCuentaTab() {
     final theme = Theme.of(context);
     final myReports = _viewModel.getMyReports(widget.user.name);
@@ -575,7 +466,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Profile card
           Card(
             color: AppTheme.primaryColor.withOpacity(0.05),
             child: Padding(
@@ -620,7 +510,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           const SizedBox(height: 20),
 
-          // Header My Reports
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -654,7 +543,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       report.title,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
-                    subtitle: Text('${report.building} - ${report.classroom} • ${report.type.displayName}'),
+                    subtitle: Text('${report.building} - ${report.classroom}'),
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -686,7 +575,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
           const SizedBox(height: 32),
 
-          // Logout Action
           ElevatedButton.icon(
             onPressed: () async {
               await AuthService().logout();
@@ -706,7 +594,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // WIDGET HELPER: Header of categories
   Widget _buildSectionHeader(String title) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -728,7 +615,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // WIDGET HELPER: Recent horizontal card (looks like the image top scroll)
   Widget _buildRecentCard(Report report) {
     return GestureDetector(
       onTap: () => _showReportDetail(report),
@@ -736,33 +622,39 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         width: 220,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF261A12), // Dark card background matching the design
+          color: const Color(0xFF261A12),
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image holder with futuristic mesh glow styling representation
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF1E3A8A).withOpacity(0.5),
-                      const Color(0xFF3B82F6).withOpacity(0.2),
-                    ],
-                  ),
+                  gradient: report.imageUrl == null
+                      ? LinearGradient(
+                          colors: [
+                            const Color(0xFF1E3A8A).withOpacity(0.5),
+                            const Color(0xFF3B82F6).withOpacity(0.2),
+                          ],
+                        )
+                      : null,
+                  image: report.imageUrl != null
+                      ? DecorationImage(image: NetworkImage(report.imageUrl!), fit: BoxFit.cover)
+                      : null,
                 ),
-                child: Center(
-                  child: Icon(
-                    Icons.settings_input_hdmi_rounded,
-                    color: Colors.blue.shade200,
-                    size: 32,
-                  ),
-                ),
+                child: report.imageUrl == null
+                    ? Center(
+                        child: Icon(
+                          Icons.settings_input_hdmi_rounded,
+                          color: Colors.blue.shade200,
+                          size: 32,
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
@@ -793,7 +685,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // WIDGET HELPER: Vertical category rows
   Widget _buildCategoryCard(Report report, IconData icon, Color color) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -804,10 +695,13 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: report.imageUrl == null ? color.withOpacity(0.12) : null,
             borderRadius: BorderRadius.circular(8),
+            image: report.imageUrl != null
+                ? DecorationImage(image: NetworkImage(report.imageUrl!), fit: BoxFit.cover)
+                : null,
           ),
-          child: Icon(icon, color: color),
+          child: report.imageUrl == null ? Icon(icon, color: color) : null,
         ),
         title: Text(
           report.title,
@@ -821,7 +715,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ],
         ),
         trailing: const Text(
-          'Hace 2h', // Mock timing
+          'Hace 2h',
           style: TextStyle(fontSize: 11, color: Colors.grey),
         ),
         onTap: () => _showReportDetail(report),
@@ -831,17 +725,17 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 }
 
 // ----------------------------------------------------
-// BOTTOM SHEET DIALOG TO CREATE REPORTS OR LOST OBJECTS
+// CREATE REPORT BOTTOM SHEET
 // ----------------------------------------------------
 class CreateReportBottomSheet extends StatefulWidget {
   final String reportedBy;
   final Function(
     String title,
-    ReportType type,
     ReportArea? area,
     String classroom,
     String building,
     String details,
+    String? imageUrl,
   ) onReportCreated;
 
   const CreateReportBottomSheet({
@@ -861,9 +755,10 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   final _buildingController = TextEditingController();
   final _detailsController = TextEditingController();
 
-  ReportType _reportType = ReportType.incidencia;
   ReportArea _reportArea = ReportArea.sistema;
   bool _isSaving = false;
+  String? _selectedImageUrl;
+  bool _isUploading = false;
 
   @override
   void dispose() {
@@ -874,6 +769,48 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
     super.dispose();
   }
 
+  final _picker = ImagePicker();
+  final _cloudinaryService = CloudinaryService();
+
+  void _pickAndUploadImage() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+
+      setState(() {
+        _isUploading = true;
+      });
+
+      final bytes = await file.readAsBytes();
+      final url = await _cloudinaryService.uploadImageBytes(
+        bytes: bytes,
+        fileName: file.name,
+      );
+
+      setState(() {
+        _selectedImageUrl = url;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir imagen: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
+
   void _save() {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -882,11 +819,11 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
 
       widget.onReportCreated(
         _titleController.text,
-        _reportType,
-        _reportType == ReportType.incidencia ? _reportArea : null,
+        _reportArea,
         _classroomController.text,
         _buildingController.text,
         _detailsController.text,
+        _selectedImageUrl,
       );
 
       Navigator.pop(context);
@@ -927,64 +864,38 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               const Divider(),
               const SizedBox(height: 12),
 
-              // Report Type Segmented Button
-              SegmentedButton<ReportType>(
-                segments: const [
-                  ButtonSegment<ReportType>(
-                    value: ReportType.incidencia,
-                    label: Text('Incidencia'),
-                  ),
-                  ButtonSegment<ReportType>(
-                    value: ReportType.objetoPerdido,
-                    label: Text('Objeto Perdido'),
-                  ),
-                ],
-                selected: {_reportType},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _reportType = selection.first;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Title (Nombre)
-              const Text('Nombre del Reporte / Objeto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text('Nombre del Reporte / Incidencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
-                  hintText: 'Ej: Licuadora descompuesta o Llaves de auto',
+                  hintText: 'Ej: Gotera en laboratorio o Proyector sin señal',
                 ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa el nombre' : null,
               ),
               const SizedBox(height: 16),
 
-              // Area (Conditionally visible for Incidents)
-              if (_reportType == ReportType.incidencia) ...[
-                const Text('Área Responsable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<ReportArea>(
-                  initialValue: _reportArea,
-                  decoration: const InputDecoration(),
-                  items: ReportArea.values.map((area) {
-                    return DropdownMenuItem<ReportArea>(
-                      value: area,
-                      child: Text(area.displayName),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _reportArea = val;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
+              const Text('Área Responsable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<ReportArea>(
+                initialValue: _reportArea,
+                decoration: const InputDecoration(),
+                items: ReportArea.values.map((area) {
+                  return DropdownMenuItem<ReportArea>(
+                    value: area,
+                    child: Text(area.displayName),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _reportArea = val;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
 
-              // Classroom (Aula) and Building (Edificio)
               Row(
                 children: [
                   Expanded(
@@ -1020,14 +931,65 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Details
+              const Text('Imagen de Referencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              if (_isUploading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_selectedImageUrl != null)
+                Stack(
+                  children: [
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: NetworkImage(_selectedImageUrl!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedImageUrl = null;
+                          });
+                        },
+                        child: const CircleAvatar(
+                          radius: 12,
+                          backgroundColor: Colors.black54,
+                          child: Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: _pickAndUploadImage,
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: const Text('Subir Imagen a Cloudinary'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primaryColor),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
               const Text('Detalles del Reporte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _detailsController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Explica los detalles sobre el incidente o el objeto extraviado...',
+                  hintText: 'Explica los detalles sobre el incidente...',
                 ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa los detalles' : null,
               ),
@@ -1046,97 +1008,210 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
 }
 
 // ----------------------------------------------------
-// BOTTOM SHEET DIALOG TO VIEW DETAILS OF ONE REPORT
+// FULL-SCREEN DETAIL VIEW (CLONE OF INCIDENT DETAIL IMAGE)
 // ----------------------------------------------------
-class ReportDetailBottomSheet extends StatelessWidget {
+class ReportDetailView extends StatelessWidget {
   final Report report;
 
-  const ReportDetailBottomSheet({super.key, required this.report});
+  const ReportDetailView({super.key, required this.report});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    
+    final bgDark = const Color(0xFF140D09);
+    final bgLight = const Color(0xFFFAF5F0);
+    final canvasBg = isDark ? bgDark : bgLight;
 
-    final dateStr = '${report.dateTime.hour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')} - ${report.dateTime.day}/${report.dateTime.month}/${report.dateTime.year}';
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final ampm = report.dateTime.hour >= 12 ? 'PM' : 'AM';
+    final displayHour = report.dateTime.hour > 12 
+        ? report.dateTime.hour - 12 
+        : (report.dateTime.hour == 0 ? 12 : report.dateTime.hour);
+    final dateStr = '${displayHour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')} $ampm, ${report.dateTime.day} ${months[report.dateTime.month - 1]} ${report.dateTime.year}';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF261D16) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                report.type.displayName,
-                style: TextStyle(
-                  color: report.type == ReportType.incidencia ? Colors.blue : Colors.teal,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
+    return Scaffold(
+      backgroundColor: canvasBg,
+      appBar: AppBar(
+        backgroundColor: canvasBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Incident Report',
+          style: TextStyle(
+            fontFamily: 'Georgia',
+            fontWeight: FontWeight.w500,
+            fontSize: 19,
+            color: AppTheme.secondaryColor,
           ),
-          Text(
-            report.title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined, size: 20),
+            onPressed: () {},
           ),
-          const SizedBox(height: 16),
-
-          // Detail parameters
-          _buildDetailRow(Icons.calendar_month_outlined, 'Fecha y Hora:', dateStr),
-          _buildDetailRow(Icons.location_on_outlined, 'Ubicación:', '${report.building}, ${report.classroom}'),
-          if (report.area != null)
-            _buildDetailRow(Icons.domain_outlined, 'Área responsable:', report.area!.displayName),
-          _buildDetailRow(Icons.person_outline_rounded, 'Reportado por:', report.reportedBy),
-          _buildDetailRow(Icons.info_outline, 'Estado:', report.status.displayName),
-
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 12),
-          const Text(
-            'Detalles del Reporte:',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.secondaryColor),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            report.details,
-            style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87),
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(width: 8),
         ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 240,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF261D16) : const Color(0xFFEFEBE7),
+                image: report.imageUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(report.imageUrl!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: report.imageUrl == null
+                  ? Center(
+                      child: Icon(
+                        Icons.report_gmailerrorred_rounded,
+                        size: 48,
+                        color: Colors.grey.shade400,
+                      ),
+                    )
+                  : null,
+            ),
+
+            Container(
+              transform: Matrix4.translationValues(0.0, -18.0, 0.0),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    report.title,
+                    style: const TextStyle(
+                      fontFamily: 'Georgia',
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.secondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (report.area != null)
+                    _buildMetaIconRow(
+                      Icons.local_offer_outlined,
+                      report.area!.displayName,
+                      const Color(0xFFD97706),
+                    ),
+                  _buildMetaIconRow(
+                    Icons.person_outline_rounded,
+                    report.reportedBy,
+                    isDark ? Colors.white60 : Colors.black54,
+                  ),
+                  _buildMetaIconRow(
+                    Icons.location_on_outlined,
+                    '${report.classroom}, ${report.building}',
+                    isDark ? Colors.white60 : Colors.black54,
+                  ),
+                  _buildMetaIconRow(
+                    Icons.access_time_outlined,
+                    dateStr,
+                    isDark ? Colors.white60 : Colors.black54,
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  const Divider(color: Color(0xFFEFEBE7)),
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Item Details',
+                    style: TextStyle(
+                      fontFamily: 'Georgia',
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.secondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    report.details,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.5,
+                      color: isDark ? Colors.white70 : const Color(0xFF555555),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    'Ubicación',
+                    style: TextStyle(
+                      fontFamily: 'Georgia',
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.secondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${report.classroom}, ${report.building}. Piso 3, al final del pasillo a la derecha.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.5,
+                      color: isDark ? Colors.white70 : const Color(0xFF555555),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 36),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Volver al Dashboard'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String title, String val) {
+  Widget _buildMetaIconRow(IconData icon, String text, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: 10.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.grey),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(width: 8),
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              val,
-              style: const TextStyle(fontSize: 13),
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
