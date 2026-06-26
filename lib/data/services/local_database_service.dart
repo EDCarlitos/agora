@@ -33,7 +33,7 @@ class LocalDatabaseService {
 
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'agora_incidents.db');
+    final path = join(dbPath, 'agora_incidents_v2.db');
 
     return await openDatabase(
       path,
@@ -54,7 +54,8 @@ class LocalDatabaseService {
         details TEXT,
         status TEXT,
         reportedBy TEXT,
-        imageUrl TEXT
+        imageUrl TEXT,
+        evidenceUrl TEXT
       )
     ''');
   }
@@ -114,6 +115,7 @@ class LocalDatabaseService {
       'status': report.status.name,
       'reportedBy': report.reportedBy,
       'imageUrl': report.imageUrl,
+      'evidenceUrl': report.evidenceUrl,
     };
   }
 
@@ -134,6 +136,7 @@ class LocalDatabaseService {
       status: ReportStatus.values.firstWhere((e) => e.name == map['status']),
       reportedBy: map['reportedBy'] as String,
       imageUrl: map['imageUrl'] as String?,
+      evidenceUrl: map['evidenceUrl'] as String?,
     );
   }
 }

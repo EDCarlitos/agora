@@ -43,6 +43,7 @@ class Report {
   final ReportStatus status;
   final String reportedBy;
   final String? imageUrl; // Reference image URL
+  final String? evidenceUrl; // Resolution evidence image URL
 
   const Report({
     required this.id,
@@ -55,6 +56,7 @@ class Report {
     required this.status,
     required this.reportedBy,
     this.imageUrl,
+    this.evidenceUrl,
   });
 
   Report copyWith({
@@ -68,6 +70,7 @@ class Report {
     ReportStatus? status,
     String? reportedBy,
     String? imageUrl,
+    String? evidenceUrl,
   }) {
     return Report(
       id: id ?? this.id,
@@ -80,6 +83,7 @@ class Report {
       status: status ?? this.status,
       reportedBy: reportedBy ?? this.reportedBy,
       imageUrl: imageUrl ?? this.imageUrl,
+      evidenceUrl: evidenceUrl ?? this.evidenceUrl,
     );
   }
 }
