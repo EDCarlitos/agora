@@ -152,6 +152,37 @@ class _ChatRoomViewState extends State<ChatRoomView> {
         time: widget.report.dateTime.add(const Duration(minutes: 2)),
       ),
     );
+
+    // 4. If the report is resolved and has evidence, load the resolution messages
+    if (_currentReportStatus == ReportStatus.resuelto) {
+      _messages.add(
+        Message(
+          text: 'Reporte marcado como RESUELTO por el técnico. Evidencia de resolución cargada con éxito a Cloudinary.',
+          isOutgoing: false,
+          time: widget.report.dateTime.add(const Duration(hours: 1)),
+          isSystem: true,
+        ),
+      );
+
+      if (widget.report.evidenceUrl != null && widget.report.evidenceUrl!.isNotEmpty) {
+        _messages.add(
+          Message(
+            text: 'Evidencia de trabajo terminado:',
+            isOutgoing: false,
+            time: widget.report.dateTime.add(const Duration(hours: 1, minutes: 1)),
+            imageUrl: widget.report.evidenceUrl,
+          ),
+        );
+      }
+
+      _messages.add(
+        Message(
+          text: 'He terminado de atender el reporte y adjunté la foto de evidencia. Si todo está correcto, daremos por concluido este caso. ¡Saludos!',
+          isOutgoing: false,
+          time: widget.report.dateTime.add(const Duration(hours: 1, minutes: 2)),
+        ),
+      );
+    }
   }
 
   void _scrollToBottom() {
@@ -482,7 +513,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       await _viewModel.updateReportStatus(
         widget.report.id,
         ReportStatus.resuelto,
-        imageUrl: cloudinaryUrl,
+        evidenceUrl: cloudinaryUrl,
       );
 
       // Add messages in chat

@@ -219,12 +219,13 @@ class StudentDashboardViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl}) async {
+  Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl, String? evidenceUrl}) async {
     final index = _reports.indexWhere((r) => r.id == id);
     if (index != -1) {
       final updatedReport = _reports[index].copyWith(
         status: newStatus,
         imageUrl: imageUrl ?? _reports[index].imageUrl,
+        evidenceUrl: evidenceUrl ?? _reports[index].evidenceUrl,
       );
       _reports[index] = updatedReport;
       await _db.saveIncident(updatedReport);
