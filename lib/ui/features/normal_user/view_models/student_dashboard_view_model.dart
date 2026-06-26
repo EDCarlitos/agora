@@ -139,6 +139,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
   Future<void> addReport({
     required String title,
     ReportArea? area,
+    required String subtype, // Asegúrate de pedirlo aquí
     required String classroom,
     required String building,
     required DateTime dateTime,

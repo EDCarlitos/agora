@@ -7,6 +7,7 @@ import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
 import 'chat_room_view.dart';
+import 'select_category_view.dart';
 
 class StudentDashboardView extends StatefulWidget {
   final User user;
@@ -38,27 +39,38 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     }
   }
 
-  void _openCreateReportDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CreateReportBottomSheet(
-        reportedBy: widget.user.name,
-        onReportCreated: (title, area, classroom, building, details, imageUrl) async {
-          await _viewModel.addReport(
-            title: title,
-            area: area,
-            classroom: classroom,
-            building: building,
-            dateTime: DateTime.now(),
-            details: details,
-            reportedBy: widget.user.name,
-            imageUrl: imageUrl,
-          );
-        },
-      ),
+  void _openCreateReportDialog() async {
+    // 1. Abrimos la nueva pantalla y esperamos a que el usuario seleccione una categoría
+    final ReportArea? selectedArea = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SelectCategoryView()),
     );
+
+    // 2. Si regresó un área (le dio a Continuar), abrimos el formulario
+    if (selectedArea != null && mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => CreateReportBottomSheet(
+          reportedBy: widget.user.name,
+          initialArea: selectedArea,
+          onReportCreated: (title, area, subtype, classroom, building, details, imageUrl) async {
+            await _viewModel.addReport(
+              title: title,
+              area: area,
+              subtype: subtype,
+              classroom: classroom,
+              building: building,
+              dateTime: DateTime.now(),
+              details: details,
+              reportedBy: widget.user.name,
+              imageUrl: imageUrl,
+            );
+          },
+        ),
+      );
+    }
   }
 
   void _showNotificationsDialog() {
@@ -270,7 +282,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF140D09) : const Color(0xFF33261C),
+              color: isDark ? AppTheme.offBlack : AppTheme.secondaryColor,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,7 +793,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         width: 220,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF261A12),
+          color: AppTheme.darkSurface,
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.all(12),
@@ -886,11 +898,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 // ----------------------------------------------------
 // CREATE REPORT BOTTOM SHEET
 // ----------------------------------------------------
+// ----------------------------------------------------
+// CREATE REPORT BOTTOM SHEET
+// ----------------------------------------------------
 class CreateReportBottomSheet extends StatefulWidget {
   final String reportedBy;
+  final ReportArea initialArea; // <-- AQUÍ RECIBE EL ÁREA DE LA PANTALLA ANTERIOR
   final Function(
     String title,
     ReportArea? area,
+    String subtype, // <-- AHORA PIDE EL SUBTIPO
     String classroom,
     String building,
     String details,
@@ -900,6 +917,7 @@ class CreateReportBottomSheet extends StatefulWidget {
   const CreateReportBottomSheet({
     super.key,
     required this.reportedBy,
+    required this.initialArea,
     required this.onReportCreated,
   });
 
@@ -914,10 +932,28 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   final _buildingController = TextEditingController();
   final _detailsController = TextEditingController();
 
-  ReportArea _reportArea = ReportArea.sistema;
+  late ReportArea _reportArea;
+  String? _selectedSubtype;
+  
   bool _isSaving = false;
   String? _selectedImageUrl;
   bool _isUploading = false;
+
+  final Map<ReportArea, List<String>> _subtypesOptions = {
+    ReportArea.sistema: ['Proyector', 'Cortina de proyector', 'Pantalla', 'Equipo de cómputo', 'Cable HDMI'],
+    ReportArea.limpieza: ['Limpieza de aula', 'Retiro de basura', 'Olor', 'Derrame'],
+    ReportArea.mantenimiento: ['Pizarrón', 'Sillas', 'Escritorios', 'Puerta', 'Iluminación', 'Cerraduras'],
+  };
+
+  final _picker = ImagePicker();
+  final _cloudinaryService = CloudinaryService();
+
+  @override
+  void initState() {
+    super.initState();
+    // <-- AQUÍ ES DONDE VA EL INIT STATE, SE ASIGNA EL ÁREA ELEGIDA
+    _reportArea = widget.initialArea; 
+  }
 
   @override
   void dispose() {
@@ -927,9 +963,6 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
     _detailsController.dispose();
     super.dispose();
   }
-
-  final _picker = ImagePicker();
-  final _cloudinaryService = CloudinaryService();
 
   void _pickAndUploadImage() async {
     try {
@@ -971,7 +1004,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   }
 
   void _save() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() && _selectedSubtype != null) {
       setState(() {
         _isSaving = true;
       });
@@ -979,6 +1012,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
       widget.onReportCreated(
         _titleController.text,
         _reportArea,
+        _selectedSubtype!,
         _classroomController.text,
         _buildingController.text,
         _detailsController.text,
@@ -986,6 +1020,10 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
       );
 
       Navigator.pop(context);
+    } else if (_selectedSubtype == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, selecciona un Subtipo')),
+        );
     }
   }
 
@@ -1010,9 +1048,9 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Crear Nuevo Registro',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+                  Text(
+                    'Nuevo reporte de ${_reportArea.displayName}', // <-- Título dinámico
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -1034,24 +1072,25 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               ),
               const SizedBox(height: 16),
 
-              const Text('Área Responsable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              // --- NUEVO DROPDOWN DE SUBTIPO ---
+              const Text('Subtipo de Incidencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 6),
-              DropdownButtonFormField<ReportArea>(
-                initialValue: _reportArea,
+              DropdownButtonFormField<String>(
+                value: _selectedSubtype,
+                hint: const Text('Selecciona el problema específico'),
                 decoration: const InputDecoration(),
-                items: ReportArea.values.map((area) {
-                  return DropdownMenuItem<ReportArea>(
-                    value: area,
-                    child: Text(area.displayName),
+                items: _subtypesOptions[_reportArea]!.map((String subtype) {
+                  return DropdownMenuItem<String>(
+                    value: subtype,
+                    child: Text(subtype),
                   );
                 }).toList(),
                 onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _reportArea = val;
-                    });
-                  }
+                  setState(() {
+                    _selectedSubtype = val;
+                  });
                 },
+                validator: (v) => v == null ? 'Selecciona un subtipo' : null,
               ),
               const SizedBox(height: 16),
 
@@ -1165,6 +1204,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
     );
   }
 }
+
 
 // ----------------------------------------------------
 // FULL-SCREEN DETAIL VIEW (CLONE OF INCIDENT DETAIL IMAGE)
