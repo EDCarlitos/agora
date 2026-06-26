@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
+import '../../../core/theme.dart';
 import '../view_models/login_view_model.dart';
 
 class LoginView extends StatefulWidget {
@@ -49,9 +50,62 @@ class _LoginViewState extends State<LoginView> {
     }
   }
 
+  void _showQuickLoginMenu() {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Accesos Rápidos (Desarrollo)',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.secondaryColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                _buildQuickLoginRow('Estudiante', 'estudiante@univ.edu', Colors.blue),
+                _buildQuickLoginRow('Limpieza', 'limpieza@univ.edu', Colors.teal),
+                _buildQuickLoginRow('Mantenimiento', 'mantenimiento@univ.edu', Colors.orange),
+                _buildQuickLoginRow('Sistemas', 'sistemas@univ.edu', Colors.purple),
+                _buildQuickLoginRow('Administrador', 'admin@univ.edu', Colors.red),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQuickLoginRow(String label, String email, Color color) {
+    return ListTile(
+      leading: CircleAvatar(radius: 6, backgroundColor: color),
+      title: Text(label),
+      subtitle: Text(email),
+      onTap: () {
+        Navigator.pop(context);
+        _quickLogin(email, 'password');
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final textColor = isDark ? Colors.white70 : AppTheme.secondaryColor;
+    final mutedColor = isDark ? Colors.white38 : const Color(0xFF786253);
 
     return Scaffold(
       body: ListenableBuilder(
@@ -65,12 +119,7 @@ class _LoginViewState extends State<LoginView> {
                   backgroundColor: theme.colorScheme.error,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  action: SnackBarAction(
-                    label: 'Cerrar',
-                    textColor: Colors.white,
-                    onPressed: () => _viewModel.clearError(),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               );
@@ -78,245 +127,242 @@ class _LoginViewState extends State<LoginView> {
             });
           }
 
-          return Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: theme.brightness == Brightness.light
-                    ? [
-                        const Color(0xFFEFF6FF), // Soft Blue
-                        const Color(0xFFDBEAFE),
-                        const Color(0xFFBFDBFE),
-                      ]
-                    : [
-                        const Color(0xFF0F172A), // Deep dark
-                        const Color(0xFF1E1B4B), // Purple hint
-                        const Color(0xFF0F172A),
-                      ],
-              ),
-            ),
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // University/App Logo Area
-                        Icon(
-                          Icons.security,
-                          size: 64,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Ágora Universitario',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: theme.brightness == Brightness.light
-                                ? theme.colorScheme.primary
-                                : Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Reporte de incidencias y objetos perdidos',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.brightness == Brightness.light
-                                ? Colors.black54
-                                : Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Form Card
-                        Card(
-                          elevation: theme.brightness == Brightness.light ? 4 : 0,
-                          child: Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Iniciar Sesión',
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // Email Field
-                                  TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textInputAction: TextInputAction.next,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Correo Institucional',
-                                      prefixIcon: Icon(Icons.email_outlined),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return 'Por favor ingresa tu correo';
-                                      }
-                                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                          .hasMatch(value.trim())) {
-                                        return 'Ingresa un correo válido';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // Password Field
-                                  TextFormField(
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    textInputAction: TextInputAction.done,
-                                    onFieldSubmitted: (_) => _submit(),
-                                    decoration: InputDecoration(
-                                      labelText: 'Contraseña',
-                                      prefixIcon: const Icon(Icons.lock_outlined),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility_off_outlined
-                                              : Icons.visibility_outlined,
-                                        ),
-                                        onPressed: () {
-                                          setState(() {
-                                            _obscurePassword = !_obscurePassword;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Por favor ingresa tu contraseña';
-                                      }
-                                      if (value.length < 6) {
-                                        return 'La contraseña debe tener al menos 6 caracteres';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // Submit Button
-                                  ElevatedButton(
-                                    onPressed: _viewModel.isLoading ? null : _submit,
-                                    child: _viewModel.isLoading
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Colors.white),
-                                            ),
-                                          )
-                                        : const Text('Ingresar'),
-                                  ),
-                                ],
+          return Stack(
+            children: [
+              // Main content
+              SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 20),
+                            
+                            // University Name Header
+                            Text(
+                              'UNIVERSIDAD POLITÉCNICA DE QUINTANA ROO',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                                color: mutedColor.withOpacity(0.8),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
+                            const SizedBox(height: 28),
 
-                        // Quick Login Options for Testing
-                        Text(
-                          'Accesos Rápidos (Modo Desarrollo)',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.brightness == Brightness.light
-                                ? Colors.black87
-                                : Colors.white.withOpacity(0.9),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            _buildQuickLoginChip(
-                              label: 'Estudiante',
-                              email: 'estudiante@univ.edu',
-                              color: Colors.blue,
+                            // Agora Serif Logo
+                            Text(
+                              'Ágora',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontFamily: 'Georgia', // Elegant serif font matching the image
+                                fontWeight: FontWeight.normal,
+                                color: textColor,
+                              ),
                             ),
-                            _buildQuickLoginChip(
-                              label: 'Limpieza',
-                              email: 'limpieza@univ.edu',
-                              color: Colors.teal,
+                            
+                            // Agora Subtitle
+                            Text(
+                              'Portal Institucional',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: mutedColor,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                            _buildQuickLoginChip(
-                              label: 'Mantenimiento',
-                              email: 'mantenimiento@univ.edu',
-                              color: Colors.orange,
+                            const SizedBox(height: 48),
+
+                            // Correo Label
+                            Text(
+                              'Correo Institucional',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
-                            _buildQuickLoginChip(
-                              label: 'Sistemas',
-                              email: 'sistemas@univ.edu',
-                              color: Colors.purple,
+                            const SizedBox(height: 8),
+                            // Correo Input
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                hintText: 'ejemplo@upqroo.edu.mx',
+                                prefixIcon: Icon(Icons.email_outlined, size: 20),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Por favor ingresa tu correo';
+                                }
+                                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                    .hasMatch(value.trim())) {
+                                  return 'Ingresa un correo válido';
+                                }
+                                return null;
+                              },
                             ),
-                            _buildQuickLoginChip(
-                              label: 'Administrador',
-                              email: 'admin@univ.edu',
-                              color: Colors.red,
+                            const SizedBox(height: 24),
+
+                            // Contraseña Label
+                            Text(
+                              'Contraseña',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // Contraseña Input
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submit(),
+                              decoration: InputDecoration(
+                                hintText: '• • • • • • • •',
+                                prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    size: 18,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor ingresa tu contraseña';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Forgot Password Link
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: GestureDetector(
+                                onTap: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Funcionalidad no implementada en este prototipo.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  '¿Olvidaste tu contraseña?',
+                                  style: TextStyle(
+                                    color: AppTheme.primaryColor,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 40),
+
+                            // Login Button
+                            ElevatedButton(
+                              onPressed: _viewModel.isLoading ? null : _submit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: _viewModel.isLoading
+                                  ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: const [
+                                        Text('Iniciar Sesión'),
+                                        SizedBox(width: 8),
+                                        Text('→', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                            ),
+                            const SizedBox(height: 48),
+
+                            // Help/Contact footer
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  '¿Problemas de acceso? Contacta a ',
+                                  style: TextStyle(fontSize: 12, color: mutedColor),
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Soporte TI: soporte@upqroo.edu.mx'),
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    'Soporte TI.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+
+              // Developer Key Button in top right corner (subtle and convenient)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: SafeArea(
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.vpn_key_outlined,
+                      color: mutedColor.withOpacity(0.5),
+                      size: 20,
+                    ),
+                    tooltip: 'Accesos de prueba',
+                    onPressed: _showQuickLoginMenu,
+                  ),
+                ),
+              ),
+            ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildQuickLoginChip({
-    required String label,
-    required String email,
-    required Color color,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ActionChip(
-      onPressed: _viewModel.isLoading ? null : () => _quickLogin(email, 'password'),
-      avatar: CircleAvatar(
-        radius: 8,
-        backgroundColor: color,
-      ),
-      label: Text(
-        label,
-        style: TextStyle(
-          color: isDark ? Colors.white : Colors.black87,
-          fontSize: 12,
-        ),
-      ),
-      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-      side: BorderSide(
-        color: color.withOpacity(0.4),
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
       ),
     );
   }

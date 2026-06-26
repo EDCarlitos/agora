@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Brand colors
-  static const Color primaryColor = Color(0xFF1E3A8A); // Deep Indigo / Institutional Blue
-  static const Color secondaryColor = Color(0xFF0F766E); // Teal / Accent
-  static const Color errorColor = Color(0xFFDC2626); // Red for reports/errors
-  static const Color warningColor = Color(0xFFD97706); // Amber for pending
-  static const Color successColor = Color(0xFF16A34A); // Green for resolved
+  // 3-Color Minimalist Palette based on the reference image
+  static const Color primaryColor = Color(0xFFBA6026); // Warm Terracotta Orange
+  static const Color secondaryColor = Color(0xFF4A3728); // Deep Warm Brown / Charcoal Text
+  static const Color backgroundColor = Color(0xFFFAF5F0); // Soft Cream / Beige Background
+  
+  static const Color errorColor = Color(0xFFDC2626); // Red for error states
+  static const Color successColor = Color(0xFF16A34A); // Green for success/resolved
 
   // Light Scheme
   static final ThemeData lightTheme = ThemeData(
@@ -17,66 +18,70 @@ class AppTheme {
       brightness: Brightness.light,
       primary: primaryColor,
       secondary: secondaryColor,
+      background: backgroundColor,
       error: errorColor,
     ),
-    scaffoldBackgroundColor: const Color(0xFFF8FAFC), // Very soft gray/blue
+    scaffoldBackgroundColor: backgroundColor,
     cardTheme: CardThemeData(
       color: Colors.white,
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.08),
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFEFEBE7), width: 1),
       ),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
     ),
     appBarTheme: const AppBarTheme(
       centerTitle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: backgroundColor,
       elevation: 0,
-      scrolledUnderElevation: 3,
-      iconTheme: IconThemeData(color: primaryColor),
+      scrolledUnderElevation: 0,
+      iconTheme: IconThemeData(color: secondaryColor),
       titleTextStyle: TextStyle(
-        color: primaryColor,
-        fontSize: 20,
+        color: secondaryColor,
+        fontSize: 18,
         fontWeight: FontWeight.bold,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFFF1F5F9), // Light background for fields
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      fillColor: Colors.white, // White background inside fields as shown in the image
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE8E2DA), width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE8E2DA), width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: primaryColor, width: 2),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: primaryColor, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: errorColor, width: 1.5),
       ),
-      labelStyle: const TextStyle(color: Colors.black54),
-      floatingLabelStyle: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+      labelStyle: const TextStyle(color: Colors.black45, fontSize: 14),
+      hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+      prefixIconColor: Colors.black38,
+      suffixIconColor: Colors.black38,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         foregroundColor: Colors.white,
         backgroundColor: primaryColor,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        elevation: 1,
+        shadowColor: primaryColor.withOpacity(0.3),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
         textStyle: const TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.2,
         ),
       ),
     ),
@@ -85,6 +90,7 @@ class AppTheme {
         foregroundColor: primaryColor,
         textStyle: const TextStyle(
           fontWeight: FontWeight.bold,
+          fontSize: 13,
         ),
       ),
     ),
@@ -92,96 +98,100 @@ class AppTheme {
       backgroundColor: primaryColor,
       foregroundColor: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
     ),
   );
 
-  // Dark Scheme
+  // Dark Scheme (maintaining the minimalist warm tones)
   static final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: ColorScheme.fromSeed(
       seedColor: primaryColor,
       brightness: Brightness.dark,
-      primary: const Color(0xFF60A5FA), // Lighter blue for dark mode
-      secondary: const Color(0xFF2DD4BF),
+      primary: primaryColor,
+      secondary: const Color(0xFFE8DCD0),
+      background: const Color(0xFF1C140E), // Very dark warm brown
       error: const Color(0xFFF87171),
     ),
-    scaffoldBackgroundColor: const Color(0xFF0F172A), // Dark slate
+    scaffoldBackgroundColor: const Color(0xFF1C140E),
     cardTheme: CardThemeData(
-      color: const Color(0xFF1E293B), // Dark slate gray card
+      color: const Color(0xFF261D16),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
       ),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
     ),
     appBarTheme: const AppBarTheme(
       centerTitle: true,
-      backgroundColor: Color(0xFF0F172A),
+      backgroundColor: Color(0xFF1C140E),
       elevation: 0,
-      scrolledUnderElevation: 3,
+      scrolledUnderElevation: 0,
       iconTheme: IconThemeData(color: Colors.white),
       titleTextStyle: TextStyle(
         color: Colors.white,
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: FontWeight.bold,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFF1E293B),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      fillColor: const Color(0xFF261D16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF60A5FA), width: 2),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: primaryColor, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
       ),
-      labelStyle: const TextStyle(color: Colors.white70),
-      floatingLabelStyle: const TextStyle(color: Color(0xFF60A5FA), fontWeight: FontWeight.bold),
+      labelStyle: const TextStyle(color: Colors.white60, fontSize: 14),
+      hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+      prefixIconColor: Colors.white38,
+      suffixIconColor: Colors.white38,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        foregroundColor: const Color(0xFF0F172A),
-        backgroundColor: const Color(0xFF60A5FA),
+        foregroundColor: Colors.white,
+        backgroundColor: primaryColor,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
         textStyle: const TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.2,
         ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFF60A5FA),
+        foregroundColor: const Color(0xFFE8DCD0),
         textStyle: const TextStyle(
           fontWeight: FontWeight.bold,
+          fontSize: 13,
         ),
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: const Color(0xFF60A5FA),
-      foregroundColor: const Color(0xFF0F172A),
+      backgroundColor: primaryColor,
+      foregroundColor: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
     ),
   );
