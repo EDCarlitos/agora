@@ -6,6 +6,7 @@ import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
+import 'chat_room_view.dart';
 
 class StudentDashboardView extends StatefulWidget {
   final User user;
@@ -160,10 +161,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu_rounded),
-          onPressed: () {},
-        ),
         title: const Text(
           'Agora',
           style: TextStyle(
@@ -265,9 +262,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final listLimpieza = _viewModel.incidents.where((r) => r.area == ReportArea.limpieza).toList();
-    final listSistemas = _viewModel.incidents.where((r) => r.area == ReportArea.sistema).toList();
-    final listMantenimiento = _viewModel.incidents.where((r) => r.area == ReportArea.mantenimiento).toList();
+    final userIncidents = _viewModel.incidents.where((r) => r.reportedBy == widget.user.name).toList();
+
+    final listLimpieza = userIncidents.where((r) => r.area == ReportArea.limpieza).toList();
+    final listSistemas = userIncidents.where((r) => r.area == ReportArea.sistema).toList();
+    final listMantenimiento = userIncidents.where((r) => r.area == ReportArea.mantenimiento).toList();
 
     return SingleChildScrollView(
       child: Column(
@@ -315,9 +314,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _viewModel.incidents.take(4).length,
+                    itemCount: userIncidents.take(4).length,
                     itemBuilder: (context, index) {
-                      final item = _viewModel.incidents[index];
+                      final item = userIncidents[index];
                       return _buildRecentCard(item);
                     },
                   ),
@@ -373,86 +372,248 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   Widget _buildChatTab() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final myIncidents = _viewModel.incidents.where((r) => r.reportedBy == widget.user.name).toList();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Mensajes y Soporte',
             style: TextStyle(
               fontFamily: 'Georgia',
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: AppTheme.secondaryColor,
+              color: isDark ? Colors.white : AppTheme.secondaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Custom search bar for messages
+          Container(
+            height: 46,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF261D16) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE8E2DA),
+              ),
+            ),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Buscar chats por reporte...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Colors.grey),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                fillColor: Colors.transparent,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.white30 : Colors.black38,
+                  fontSize: 13.5,
+                ),
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          Text(
+            'Chats por Reporte',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3,
+              color: isDark ? Colors.white70 : AppTheme.secondaryColor.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ListView(
-              children: [
-                _buildChatChannelItem(
-                  'Soporte Técnico (Sistemas)',
-                  'Hola, revisaremos la conexión WiFi en la biblioteca hoy por la tarde.',
-                  '10:32 AM',
-                  true,
-                ),
-                _buildChatChannelItem(
-                  'Administración de Mantenimiento',
-                  'El reporte del proyector en el aula 302 ha sido resuelto.',
-                  'Ayer',
-                  false,
-                ),
-                _buildChatChannelItem(
-                  'Limpieza - Coordinación',
-                  'Recibido, enviaremos personal a limpiar el derrame.',
-                  '25 Oct',
-                  false,
-                ),
-              ],
-            ),
+            child: myIncidents.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 48,
+                            color: isDark ? Colors.white24 : Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No tienes chats de reportes aún.',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white60 : AppTheme.secondaryColor.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Crea un nuevo reporte usando el botón "+" para iniciar un canal de comunicación con soporte.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white30 : Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: myIncidents.length,
+                    itemBuilder: (context, index) {
+                      final report = myIncidents[index];
+                      final timeStr = '${report.dateTime.hour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')}';
+                      return _buildChatReportChannelItem(report, timeStr);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildChatChannelItem(String title, String lastMsg, String time, bool unread) {
+  Widget _buildChatReportChannelItem(Report report, String timeStr) {
     final theme = Theme.of(context);
-    return Card(
+    final isDark = theme.brightness == Brightness.dark;
+
+    final IconData icon = report.area == ReportArea.sistema
+        ? Icons.laptop_mac_rounded
+        : report.area == ReportArea.mantenimiento
+            ? Icons.construction_rounded
+            : Icons.cleaning_services_rounded;
+
+    String statusMsg = '';
+    switch (report.status) {
+      case ReportStatus.pendiente:
+        statusMsg = 'Esperando asignación de personal...';
+        break;
+      case ReportStatus.enProceso:
+        statusMsg = 'Personal operativo asignado y en proceso.';
+        break;
+      case ReportStatus.resuelto:
+        statusMsg = 'Resuelto: El reporte ha sido completado.';
+        break;
+    }
+
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: AppTheme.primaryColor.withOpacity(0.15),
-          child: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryColor),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF261D16) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFEFEBE7),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(
-          lastMsg,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: unread ? FontWeight.bold : FontWeight.normal,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatRoomView(report: report),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
+                  child: Icon(icon, color: AppTheme.primaryColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        report.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.2,
+                          color: isDark ? Colors.white : AppTheme.secondaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        statusMsg,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: report.status == ReportStatus.pendiente
+                              ? AppTheme.primaryColor.withValues(alpha: 0.8)
+                              : Colors.grey.shade600,
+                          fontWeight: report.status == ReportStatus.pendiente ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      timeStr,
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: report.status == ReportStatus.resuelto
+                            ? Colors.green.shade600.withValues(alpha: 0.15)
+                            : report.status == ReportStatus.enProceso
+                                ? Colors.blue.shade600.withValues(alpha: 0.15)
+                                : AppTheme.primaryColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        report.status.name.toUpperCase(),
+                        style: TextStyle(
+                          color: report.status == ReportStatus.resuelto
+                              ? Colors.green.shade600
+                              : report.status == ReportStatus.enProceso
+                                  ? Colors.blue.shade600
+                                  : AppTheme.primaryColor,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(time, style: TextStyle(color: theme.hintColor, fontSize: 10)),
-            if (unread) ...[
-              const SizedBox(height: 4),
-              const CircleAvatar(radius: 4, backgroundColor: AppTheme.primaryColor),
-            ],
-          ],
-        ),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Chat con "$title" abierto (UI Prototipo)')),
-          );
-        },
       ),
     );
   }
