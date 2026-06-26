@@ -26,11 +26,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   int _selectedIndex = 0;
   final _viewModel = StudentDashboardViewModel();
 
-  @override
-  void dispose() {
-    _viewModel.dispose();
-    super.dispose();
-  }
 
   void _onItemTapped(int index) {
     if (index == 1) {
@@ -529,7 +524,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ChatRoomView(report: report),
+                builder: (context) => ChatRoomView(
+                  report: report,
+                  currentUser: widget.user,
+                ),
               ),
             );
           },

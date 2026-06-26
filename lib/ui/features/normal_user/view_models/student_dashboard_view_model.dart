@@ -3,6 +3,13 @@ import '../../../../data/models/report.dart';
 import '../../../../data/services/local_database_service.dart';
 
 class StudentDashboardViewModel extends ChangeNotifier {
+  static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
+  factory StudentDashboardViewModel() => _instance;
+
+  StudentDashboardViewModel._internal() {
+    loadReports();
+  }
+
   final LocalDatabaseService _db = LocalDatabaseService();
 
   // In-memory list of reports initialized with working picsum.photos images
@@ -186,5 +193,52 @@ class StudentDashboardViewModel extends ChangeNotifier {
       n['isRead'] = true;
     }
     notifyListeners();
+  }
+
+  Future<void> loadReports() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final dbIncidents = await _db.getIncidents();
+      if (dbIncidents.isNotEmpty) {
+        _reports.clear();
+        _reports.addAll(dbIncidents);
+      } else {
+        // Pre-populate DB with mock items
+        for (var r in _reports) {
+          await _db.saveIncident(r);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al cargar reportes de DB local: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl}) async {
+    final index = _reports.indexWhere((r) => r.id == id);
+    if (index != -1) {
+      final updatedReport = _reports[index].copyWith(
+        status: newStatus,
+        imageUrl: imageUrl ?? _reports[index].imageUrl,
+      );
+      _reports[index] = updatedReport;
+      await _db.saveIncident(updatedReport);
+      
+      if (newStatus == ReportStatus.resuelto) {
+        notifications.insert(0, {
+          'id': 'n${notifications.length + 1}',
+          'title': 'Reporte Resuelto',
+          'body': 'Tu reporte "${updatedReport.title}" en ${updatedReport.classroom} ha sido completado.',
+          'time': 'Ahora mismo',
+          'isRead': false,
+        });
+      }
+      
+      notifyListeners();
+    }
   }
 }

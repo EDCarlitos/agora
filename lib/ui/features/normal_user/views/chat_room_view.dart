@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
+import '../../../../data/models/user.dart';
+import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
+import '../view_models/student_dashboard_view_model.dart';
 
 class Message {
   final String text;
@@ -25,10 +29,12 @@ class Message {
 
 class ChatRoomView extends StatefulWidget {
   final Report report;
+  final User currentUser;
 
   const ChatRoomView({
     super.key,
     required this.report,
+    required this.currentUser,
   });
 
   @override
@@ -42,10 +48,18 @@ class _ChatRoomViewState extends State<ChatRoomView> {
   final List<Message> _messages = [];
   bool _isTyping = false;
   List<String> _quickReplies = [];
+  
+  late ReportStatus _currentReportStatus;
+  bool _isResolving = false;
+
+  final _picker = ImagePicker();
+  final _cloudinaryService = CloudinaryService();
+  final _viewModel = StudentDashboardViewModel(); // Shared singleton instance
 
   @override
   void initState() {
     super.initState();
+    _currentReportStatus = widget.report.status;
     _loadInitialMessages();
     _loadQuickReplies();
   }
@@ -60,27 +74,38 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
   void _loadQuickReplies() {
     final area = widget.report.area;
-    if (area == ReportArea.sistema) {
+    final isStaff = widget.currentUser.role != UserRole.estudiante;
+
+    if (isStaff) {
       _quickReplies = [
-        '¿Hay alguna novedad?',
-        'Ya reinicié el router',
-        'Sigo sin red',
-        '¡Muchas gracias por resolverlo!',
-      ];
-    } else if (area == ReportArea.mantenimiento) {
-      _quickReplies = [
-        '¿A qué hora vendrán?',
-        'Sigue fallando',
-        '¿Ocupan más fotos?',
-        'Entendido, gracias',
+        'Ya voy en camino',
+        'Necesito más información',
+        'Revisión completada',
+        'Favor de confirmar solución',
       ];
     } else {
-      _quickReplies = [
-        'Ya se encuentra limpio',
-        'Falta jabón/papel',
-        'Gracias por atenderlo',
-        '¿Cuándo pasarán?',
-      ];
+      if (area == ReportArea.sistema) {
+        _quickReplies = [
+          '¿Hay alguna novedad?',
+          'Ya reinicié el router',
+          'Sigo sin red',
+          '¡Muchas gracias por resolverlo!',
+        ];
+      } else if (area == ReportArea.mantenimiento) {
+        _quickReplies = [
+          '¿A qué hora vendrán?',
+          'Sigue goteando',
+          '¿Ocupan más fotos?',
+          'Entendido, gracias',
+        ];
+      } else {
+        _quickReplies = [
+          'Ya se encuentra limpio',
+          'Falta jabón/papel',
+          'Gracias por atenderlo',
+          '¿Cuándo pasarán?',
+        ];
+      }
     }
   }
 
@@ -88,7 +113,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     // 1. System banner for report info
     _messages.add(
       Message(
-        text: 'Reporte: "${widget.report.title}" en ${widget.report.classroom} (${widget.report.building}). Estado: ${widget.report.status.name.toUpperCase()}',
+        text: 'Reporte: "${widget.report.title}" en ${widget.report.classroom} (${widget.report.building}). Estado: ${_currentReportStatus.name.toUpperCase()}',
         isOutgoing: false,
         time: widget.report.dateTime,
         isSystem: true,
@@ -139,31 +164,38 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     }
   }
 
-  void _sendMessage({String? text, String? imageUrl, bool isAudio = false, String? audioDuration}) {
+  void _sendMessage({String? text, String? imageUrl, bool isAudio = false, String? audioDuration, bool isSystem = false}) {
     final messageText = text ?? _textController.text.trim();
-    if (messageText.isEmpty && imageUrl == null && !isAudio) return;
+    if (messageText.isEmpty && imageUrl == null && !isAudio && !isSystem) return;
 
-    if (text == null) {
+    if (text == null && !isSystem) {
       _textController.clear();
     }
+
+    // If a message is typed in this view, it is outgoing (from the currentUser's perspective)
+    final actualOutgoing = !isSystem ? true : false; 
+
 
     setState(() {
       _messages.add(
         Message(
           text: messageText,
-          isOutgoing: true,
+          isOutgoing: actualOutgoing,
           time: DateTime.now(),
           imageUrl: imageUrl,
           isAudio: isAudio,
           audioDuration: audioDuration,
+          isSystem: isSystem,
         ),
       );
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
-    // Context-aware simulated responses
-    _triggerAutoReply(messageText, imageUrl != null, isAudio);
+    // Only trigger bot auto-reply if the student is typing and report is not resolved
+    if (widget.currentUser.role == UserRole.estudiante && _currentReportStatus != ReportStatus.resuelto && !isSystem) {
+      _triggerAutoReply(messageText, imageUrl != null, isAudio);
+    }
   }
 
   void _triggerAutoReply(String userMsg, bool isImage, bool isAudio) {
@@ -341,6 +373,165 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     );
   }
 
+  void _resolveReport() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // 1. Show options to pick from Gallery or Camera
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF261D16) : Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'Subir Evidencia de Resolución',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppTheme.secondaryColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Es obligatorio adjuntar una foto para marcar este reporte como Terminado.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: theme.hintColor),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context, ImageSource.camera),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
+                          child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor, size: 24),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Cámara', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context, ImageSource.gallery),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.blue.withValues(alpha: 0.12),
+                          child: const Icon(Icons.photo_library_rounded, color: Colors.blue, size: 24),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Galería', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    // Pick the image
+    final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
+    if (file == null) return;
+
+    // 2. Show upload spinner
+    setState(() {
+      _isResolving = true;
+    });
+
+    try {
+      final bytes = await file.readAsBytes();
+      
+      // Upload to Cloudinary
+      final cloudinaryUrl = await _cloudinaryService.uploadImageBytes(
+        bytes: bytes,
+        fileName: 'res_${widget.report.id}_${file.name}',
+      );
+
+      // 3. Update status in local database & in-memory viewmodel
+      await _viewModel.updateReportStatus(
+        widget.report.id,
+        ReportStatus.resuelto,
+        imageUrl: cloudinaryUrl,
+      );
+
+      // Add messages in chat
+      _sendMessage(
+        text: 'Reporte marcado como RESUELTO por ${widget.currentUser.name}. Evidencia de resolución cargada con éxito a Cloudinary.',
+        isSystem: true,
+      );
+
+      _sendMessage(
+        text: 'Evidencia de trabajo terminado:',
+        imageUrl: cloudinaryUrl,
+      );
+
+      _sendMessage(
+        text: 'He terminado de atender el reporte y adjunté la foto de evidencia. Si todo está correcto, daremos por concluido este caso. ¡Saludos!',
+      );
+
+      setState(() {
+        _currentReportStatus = ReportStatus.resuelto;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reporte marcado como Terminado y evidencia guardada.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir evidencia a Cloudinary: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResolving = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -357,6 +548,10 @@ class _ChatRoomViewState extends State<ChatRoomView> {
         : widget.report.area == ReportArea.mantenimiento
             ? 'Mantenimiento'
             : 'Limpieza';
+
+    // Show "Marcar como Terminado" action button for Staff if report is NOT already resolved
+    final showResolveButton = widget.currentUser.role != UserRole.estudiante &&
+        _currentReportStatus != ReportStatus.resuelto;
 
     return Scaffold(
       appBar: AppBar(
@@ -429,6 +624,34 @@ class _ChatRoomViewState extends State<ChatRoomView> {
             ),
           ],
         ),
+        actions: [
+          if (showResolveButton)
+            _isResolving
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor)),
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: TextButton.icon(
+                      onPressed: _resolveReport,
+                      icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                      label: const Text('Resolver', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green.shade600,
+                        backgroundColor: Colors.green.shade600.withValues(alpha: 0.1),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -437,6 +660,28 @@ class _ChatRoomViewState extends State<ChatRoomView> {
         child: SafeArea(
           child: Column(
             children: [
+              // Loading/Uploading cover
+              if (_isResolving)
+                Container(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Subiendo evidencia a Cloudinary y terminando reporte...',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -452,7 +697,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Chat de Soporte Técnico para reporte: ${widget.report.classroom}.',
+                        'Chat de Soporte Técnico para reporte: ${widget.report.classroom}. Estado: ${_currentReportStatus.name.toUpperCase()}',
                         style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.grey : Colors.black54,
@@ -503,7 +748,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 ),
 
               // Quick replies pill list
-              if (_quickReplies.isNotEmpty)
+              if (_quickReplies.isNotEmpty && _currentReportStatus != ReportStatus.resuelto)
                 Container(
                   height: 42,
                   margin: const EdgeInsets.only(bottom: 6),
@@ -543,65 +788,84 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 ),
 
               // Input Send Bar (Bottom)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
-                  border: Border(
-                    top: BorderSide(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : const Color(0xFFEFEBE7),
+              if (_currentReportStatus != ReportStatus.resuelto)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                    border: Border(
+                      top: BorderSide(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : const Color(0xFFEFEBE7),
+                      ),
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.attach_file_rounded, color: AppTheme.primaryColor),
-                      onPressed: _showAttachmentMenu,
-                    ),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF261D16) : const Color(0xFFF5F2EE),
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: TextField(
-                          controller: _textController,
-                          focusNode: _focusNode,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _sendMessage(),
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            color: isDark ? Colors.white : AppTheme.secondaryColor,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.attach_file_rounded, color: AppTheme.primaryColor),
+                        onPressed: _showAttachmentMenu,
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF261D16) : const Color(0xFFF5F2EE),
+                            borderRadius: BorderRadius.circular(24),
                           ),
-                          decoration: const InputDecoration(
-                            hintText: 'Escribe un mensaje...',
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            fillColor: Colors.transparent,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                          child: TextField(
+                            controller: _textController,
+                            focusNode: _focusNode,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendMessage(),
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              color: isDark ? Colors.white : AppTheme.secondaryColor,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Escribe un mensaje...',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              fillColor: Colors.transparent,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _sendMessage(),
-                      child: const CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AppTheme.primaryColor,
-                        child: Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _sendMessage(),
+                        child: const CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AppTheme.primaryColor,
+                          child: Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                // Nice Resolution banner instead of input bar
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                  child: Center(
+                    child: Text(
+                      'Este reporte ha sido marcado como Terminado y no se permiten más mensajes.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white54 : Colors.black45,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),

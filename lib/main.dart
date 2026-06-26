@@ -4,6 +4,7 @@ import 'ui/core/theme.dart';
 import 'ui/features/login/views/login_view.dart';
 import 'ui/features/normal_user/views/student_dashboard_view.dart';
 import 'ui/features/other_roles/role_stubs.dart';
+import 'ui/features/staff/views/staff_dashboard_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -51,8 +52,13 @@ class _MyAppState extends State<MyApp> {
         user: user,
         onLogout: _logoutUser,
       );
-    } else {
+    } else if (user.role == UserRole.administrador) {
       return RoleDashboardStub(
+        user: user,
+        onLogout: _logoutUser,
+      );
+    } else {
+      return StaffDashboardView(
         user: user,
         onLogout: _logoutUser,
       );
