@@ -29,54 +29,75 @@ enum ReportStatus {
   }
 }
 
+enum ReportArea {
+  sistema,
+  limpieza,
+  mantenimiento;
+
+  String get displayName {
+    switch (this) {
+      case ReportArea.sistema:
+        return 'Sistemas';
+      case ReportArea.limpieza:
+        return 'Limpieza';
+      case ReportArea.mantenimiento:
+        return 'Mantenimiento';
+    }
+  }
+}
+
 class Report {
   final String id;
-  final String title;
-  final String description;
-  final String location;
-  final ReportType type;
+  final String title; // Nombre del reporte
+  final ReportArea? area; // Area (sistema, limpieza, mantenimiento) - null for lost objects if not applicable
+  final String classroom; // Aula
+  final String building; // Edificio
+  final DateTime dateTime; // Hora y fecha
+  final String details; // Detalles del reporte
+  final ReportType type; // Tipo de reporte (incidencia / objeto)
   final ReportStatus status;
-  final DateTime createdAt;
   final String reportedBy;
-  final String category;
-  final String? contactPhone; // Useful for lost objects
+  final String? imageUrl; // Mock image indicator or assets
 
   const Report({
     required this.id,
     required this.title,
-    required this.description,
-    required this.location,
+    this.area,
+    required this.classroom,
+    required this.building,
+    required this.dateTime,
+    required this.details,
     required this.type,
     required this.status,
-    required this.createdAt,
     required this.reportedBy,
-    required this.category,
-    this.contactPhone,
+    this.imageUrl,
   });
 
   Report copyWith({
     String? id,
     String? title,
-    String? description,
-    String? location,
+    ReportArea? area,
+    String? classroom,
+    String? building,
+    DateTime? dateTime,
+    String? details,
     ReportType? type,
     ReportStatus? status,
-    DateTime? createdAt,
     String? reportedBy,
-    String? category,
-    String? contactPhone,
+    String? imageUrl,
   }) {
     return Report(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description ?? this.description,
-      location: location ?? this.location,
+      area: area ?? this.area,
+      classroom: classroom ?? this.classroom,
+      building: building ?? this.building,
+      dateTime: dateTime ?? this.dateTime,
+      details: details ?? this.details,
       type: type ?? this.type,
       status: status ?? this.status,
-      createdAt: createdAt ?? this.createdAt,
       reportedBy: reportedBy ?? this.reportedBy,
-      category: category ?? this.category,
-      contactPhone: contactPhone ?? this.contactPhone,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }

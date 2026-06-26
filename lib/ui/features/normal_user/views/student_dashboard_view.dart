@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
+import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
 
 class StudentDashboardView extends StatefulWidget {
@@ -19,6 +20,7 @@ class StudentDashboardView extends StatefulWidget {
 }
 
 class _StudentDashboardViewState extends State<StudentDashboardView> {
+  int _selectedIndex = 0;
   final _viewModel = StudentDashboardViewModel();
 
   @override
@@ -27,55 +29,108 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     super.dispose();
   }
 
-  void _handleLogout() async {
-    final theme = Theme.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cerrar Sesión'),
-        content: const Text('¿Estás seguro de que deseas salir de tu cuenta?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Cerrar Sesión'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await AuthService().logout();
-      widget.onLogout();
+  void _onItemTapped(int index) {
+    if (index == 2) {
+      // The "+" tab opens the creation form dialog directly
+      _openCreateReportDialog();
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
     }
   }
 
-  void _openCreateReportDialog(ReportType initialType) {
-    showDialog(
+  void _openCreateReportDialog() {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => CreateReportDialog(
-        initialType: initialType,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CreateReportBottomSheet(
         reportedBy: widget.user.name,
-        onReportCreated: (title, description, location, type, category, phone) async {
+        onReportCreated: (title, type, area, classroom, building, details) async {
           await _viewModel.addReport(
             title: title,
-            description: description,
-            location: location,
             type: type,
-            category: category,
-            contactPhone: phone,
+            area: area,
+            classroom: classroom,
+            building: building,
+            dateTime: DateTime.now(),
+            details: details,
             reportedBy: widget.user.name,
           );
         },
       ),
+    );
+  }
+
+  void _showNotificationsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return ListenableBuilder(
+          listenable: _viewModel,
+          builder: (context, _) {
+            final list = _viewModel.notifications;
+            return AlertDialog(
+              title: const Text('Notificaciones'),
+              content: SizedBox(
+                width: 320,
+                child: list.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.0),
+                        child: Text(
+                          'No tienes notificaciones en este momento.',
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const Divider(),
+                        itemBuilder: (context, i) {
+                          final n = list[i];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              n['title'],
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            subtitle: Text(n['body'], style: const TextStyle(fontSize: 12)),
+                            trailing: Text(
+                              n['time'],
+                              style: TextStyle(color: theme.hintColor, fontSize: 10),
+                            ),
+                            leading: CircleAvatar(
+                              radius: 4,
+                              backgroundColor: n['isRead'] ? Colors.transparent : AppTheme.primaryColor,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _viewModel.markNotificationsAsRead();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Marcar como leídas'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showReportDetail(Report report) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportDetailBottomSheet(report: report),
     );
   }
 
@@ -84,411 +139,652 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Filter screens depending on selection index
+    Widget bodyWidget;
+    switch (_selectedIndex) {
+      case 0:
+        bodyWidget = _buildIncidenciasTab();
+        break;
+      case 1:
+        bodyWidget = _buildObjetosTab();
+        break;
+      case 3:
+        bodyWidget = _buildChatTab();
+        break;
+      case 4:
+        bodyWidget = _buildCuentaTab();
+        break;
+      default:
+        bodyWidget = _buildIncidenciasTab();
+    }
+
+    // Number of unread notifications
+    final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.school_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            const Text('Ágora Estudiantes'),
-          ],
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          onPressed: () {},
+        ),
+        title: const Text(
+          'Agora',
+          style: TextStyle(
+            fontFamily: 'Georgia',
+            fontWeight: FontWeight.w600,
+            fontSize: 22,
+          ),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Cerrar Sesión',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: _handleLogout,
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none_rounded),
+                onPressed: _showNotificationsDialog,
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
+          const CircleAvatar(
+            radius: 16,
+            backgroundImage: NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+          ),
+          const SizedBox(width: 16),
         ],
       ),
       body: ListenableBuilder(
         listenable: _viewModel,
-        builder: (context, _) {
-          final reports = _viewModel.filteredReports;
+        builder: (context, _) => bodyWidget,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFEFEBE7),
+              width: 1,
+            ),
+          ),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: isDark ? const Color(0xFF1C140E) : AppTheme.backgroundColor,
+          selectedItemColor: AppTheme.primaryColor,
+          unselectedItemColor: isDark ? Colors.white38 : const Color(0xFF8F7A6E),
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+          unselectedLabelStyle: const TextStyle(fontSize: 10),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.report_gmailerrorred_outlined),
+              activeIcon: Icon(Icons.report_gmailerrorred_rounded),
+              label: 'Incidencias',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.search_rounded),
+              activeIcon: Icon(Icons.manage_search_rounded),
+              label: 'Objetos',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.add_circle, size: 36, color: AppTheme.primaryColor),
+              label: 'Agregar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline_rounded),
+              activeIcon: Icon(Icons.chat_bubble_rounded),
+              label: 'Chat',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Cuenta',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              // Just simulate loading fresh data
-              await Future.delayed(const Duration(milliseconds: 500));
-              setState(() {});
-            },
-            child: CustomScrollView(
-              slivers: [
-                // Welcome Header Card
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isDark
-                              ? [const Color(0xFF1E293B), const Color(0xFF334155)]
-                              : [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+  // TAB 1: INCIDENCIAS
+  Widget _buildIncidenciasTab() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Filters for UI display based on categories
+    final listLimpieza = _viewModel.incidents.where((r) => r.area == ReportArea.limpieza).toList();
+    final listSistemas = _viewModel.incidents.where((r) => r.area == ReportArea.sistema).toList();
+    final listMantenimiento = _viewModel.incidents.where((r) => r.area == ReportArea.mantenimiento).toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. HEADER SECTION: Reportes Recientes (Dark header row)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF140D09) : const Color(0xFF33261C), // Deep brown color
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Reportes Recientes',
+                        style: TextStyle(
+                          fontFamily: 'Georgia',
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                        borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Column(
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedIndex = 4; // Redirect to Cuenta to view all
+                          });
+                        },
+                        child: const Text(
+                          'Ver todos',
+                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 13), // Yellow accent
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 180,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _viewModel.incidents.take(4).length,
+                    itemBuilder: (context, index) {
+                      final item = _viewModel.incidents[index];
+                      return _buildRecentCard(item);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 2. CATEGORIES SECTIONS
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Limpieza Section
+                _buildSectionHeader('Limpieza'),
+                const SizedBox(height: 8),
+                if (listLimpieza.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text('No hay reportes de Limpieza activos.'),
+                  )
+                else
+                  ...listLimpieza.take(2).map((r) => _buildCategoryCard(r, Icons.cleaning_services_outlined, const Color(0xFFFBBF24))),
+
+                const SizedBox(height: 20),
+
+                // Sistemas Section
+                _buildSectionHeader('Sistemas'),
+                const SizedBox(height: 8),
+                if (listSistemas.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text('No hay reportes de Sistemas activos.'),
+                  )
+                else
+                  ...listSistemas.take(2).map((r) => _buildCategoryCard(r, Icons.computer_outlined, const Color(0xFF3B82F6))),
+
+                const SizedBox(height: 20),
+
+                // Mantenimiento Section
+                _buildSectionHeader('Mantenimiento'),
+                const SizedBox(height: 8),
+                if (listMantenimiento.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text('No hay reportes de Mantenimiento activos.'),
+                  )
+                else
+                  ...listMantenimiento.take(2).map((r) => _buildCategoryCard(r, Icons.build_outlined, const Color(0xFFEF4444))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // TAB 2: OBJETOS
+  Widget _buildObjetosTab() {
+    final theme = Theme.of(context);
+    final objects = _viewModel.lostObjects;
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Objetos Perdidos',
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.secondaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Si encontraste o perdiste algo en el campus, publícalo aquí.',
+                  style: TextStyle(color: theme.hintColor, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (objects.isEmpty)
+          const SliverFillRemaining(
+            child: Center(
+              child: Text('No hay reportes de objetos perdidos.'),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final obj = objects[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(12),
+                      leading: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
+                      ),
+                      title: Text(
+                        obj.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '¡Hola, ${widget.user.name}!',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                           const SizedBox(height: 4),
-                          Text(
-                            'Reporta incidencias técnicas o publica objetos que hayas perdido en el campus universitario.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white.withOpacity(0.85),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
                           Row(
                             children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _openCreateReportDialog(ReportType.incidencia),
-                                  icon: const Icon(Icons.report_gmailerrorred_rounded, size: 18),
-                                  label: const Text('Incidencia'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isDark ? Colors.blueAccent : Colors.white,
-                                    foregroundColor: isDark ? Colors.white : theme.colorScheme.primary,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _openCreateReportDialog(ReportType.objetoPerdido),
-                                  icon: const Icon(Icons.search_rounded, size: 18),
-                                  label: const Text('Objeto Perdido'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isDark ? Colors.tealAccent.shade700 : theme.colorScheme.secondary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                ),
-                              ),
+                              const Icon(Icons.location_on_outlined, size: 13, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text('${obj.building} - ${obj.classroom}', style: const TextStyle(fontSize: 12)),
                             ],
                           ),
                         ],
                       ),
+                      trailing: Text(
+                        '${obj.dateTime.day}/${obj.dateTime.month}',
+                        style: TextStyle(color: theme.hintColor, fontSize: 11),
+                      ),
+                      onTap: () => _showReportDetail(obj),
                     ),
-                  ),
-                ),
+                  );
+                },
+                childCount: objects.length,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
-                // Filters Header
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mis Reportes y Publicaciones',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Type Filters Row
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ChoiceChip(
-                                label: const Text('Todos los Tipos'),
-                                selected: _viewModel.typeFilter == null,
-                                onSelected: (selected) =>
-                                    _viewModel.setTypeFilter(null),
-                              ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('Incidencias'),
-                                selected: _viewModel.typeFilter == ReportType.incidencia,
-                                onSelected: (selected) => _viewModel.setTypeFilter(
-                                    selected ? ReportType.incidencia : null),
-                              ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('Objetos Perdidos'),
-                                selected: _viewModel.typeFilter == ReportType.objetoPerdido,
-                                onSelected: (selected) => _viewModel.setTypeFilter(
-                                    selected ? ReportType.objetoPerdido : null),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Status Filters Row
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ChoiceChip(
-                                label: const Text('Todos los Estados'),
-                                selected: _viewModel.statusFilter == null,
-                                onSelected: (selected) =>
-                                    _viewModel.setStatusFilter(null),
-                              ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('Pendiente'),
-                                selected: _viewModel.statusFilter == ReportStatus.pendiente,
-                                onSelected: (selected) => _viewModel.setStatusFilter(
-                                    selected ? ReportStatus.pendiente : null),
-                              ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('En Proceso'),
-                                selected: _viewModel.statusFilter == ReportStatus.enProceso,
-                                onSelected: (selected) => _viewModel.setStatusFilter(
-                                    selected ? ReportStatus.enProceso : null),
-                              ),
-                              const SizedBox(width: 8),
-                              ChoiceChip(
-                                label: const Text('Resuelto'),
-                                selected: _viewModel.statusFilter == ReportStatus.resuelto,
-                                onSelected: (selected) => _viewModel.setStatusFilter(
-                                    selected ? ReportStatus.resuelto : null),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+  // TAB 3: CHAT (STUB)
+  Widget _buildChatTab() {
+    final theme = Theme.of(context);
 
-                // Reports List/Grid
-                if (_viewModel.isLoading)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (reports.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.folder_open_outlined,
-                              size: 72,
-                              color: theme.hintColor.withOpacity(0.5),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No se encontraron reportes',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Intenta cambiar los filtros o publica uno nuevo usando los botones de arriba.',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.hintColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    sliver: SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: MediaQuery.of(context).size.width > 720 ? 2 : 1,
-                        mainAxisExtent: 220,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 8,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final report = reports[index];
-                          return ReportCard(report: report);
-                        },
-                        childCount: reports.length,
-                      ),
-                    ),
-                  ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+          const Text(
+            'Mensajes y Soporte',
+            style: TextStyle(
+              fontFamily: 'Georgia',
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.secondaryColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildChatChannelItem(
+                  'Soporte Técnico (Sistemas)',
+                  'Hola, revisaremos la conexión WiFi en la biblioteca hoy por la tarde.',
+                  '10:32 AM',
+                  true,
+                ),
+                _buildChatChannelItem(
+                  'Administración de Mantenimiento',
+                  'El reporte del proyector en el aula 302 ha sido resuelto.',
+                  'Ayer',
+                  false,
+                ),
+                _buildChatChannelItem(
+                  'Limpieza - Coordinación',
+                  'Recibido, enviaremos personal a limpiar el derrame.',
+                  '25 Oct',
+                  false,
+                ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatChannelItem(String title, String lastMsg, String time, bool unread) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: AppTheme.primaryColor.withOpacity(0.15),
+          child: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryColor),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text(
+          lastMsg,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: unread ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(time, style: TextStyle(color: theme.hintColor, fontSize: 10)),
+            if (unread) ...[
+              const SizedBox(height: 4),
+              const CircleAvatar(radius: 4, backgroundColor: AppTheme.primaryColor),
+            ],
+          ],
+        ),
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Chat con "$title" abierto (UI Prototipo)')),
           );
         },
       ),
     );
   }
-}
 
-class ReportCard extends StatelessWidget {
-  final Report report;
-
-  const ReportCard({super.key, required this.report});
-
-  @override
-  Widget build(BuildContext context) {
+  // TAB 4: CUENTA (PROFILE + VER MIS REPORTES + LOGOUT)
+  Widget _buildCuentaTab() {
     final theme = Theme.of(context);
-    final isIncident = report.type == ReportType.incidencia;
+    final myReports = _viewModel.getMyReports(widget.user.name);
 
-    // Helper to format date
-    final dateStr = '${report.createdAt.day}/${report.createdAt.month}/${report.createdAt.year}';
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Profile card
+          Card(
+            color: AppTheme.primaryColor.withOpacity(0.05),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 28,
+                    backgroundImage: NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.user.name,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          widget.user.email,
+                          style: TextStyle(fontSize: 12, color: theme.hintColor),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            widget.user.role.displayName,
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
 
-    // Color helpers for status
-    Color statusColor;
-    Color statusBgColor;
-    switch (report.status) {
-      case ReportStatus.pendiente:
-        statusColor = const Color(0xFFD97706); // Amber
-        statusBgColor = const Color(0xFFFEF3C7);
-        break;
-      case ReportStatus.enProceso:
-        statusColor = const Color(0xFF2563EB); // Blue
-        statusBgColor = const Color(0xFFDBEAFE);
-        break;
-      case ReportStatus.resuelto:
-        statusColor = const Color(0xFF16A34A); // Green
-        statusBgColor = const Color(0xFFDCFCE7);
-        break;
-    }
+          // Header My Reports
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mis Reportes Publicados (${myReports.length})',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
 
-    if (theme.brightness == Brightness.dark) {
-      statusBgColor = statusColor.withOpacity(0.2);
-    }
+          if (myReports.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Text(
+                'No has publicado ningún reporte aún.',
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: myReports.length,
+              itemBuilder: (context, index) {
+                final report = myReports[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(
+                      report.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: Text('${report.building} - ${report.classroom} • ${report.type.displayName}'),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: report.status == ReportStatus.resuelto
+                            ? Colors.green.withOpacity(0.1)
+                            : report.status == ReportStatus.enProceso
+                                ? Colors.blue.withOpacity(0.1)
+                                : Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        report.status.displayName,
+                        style: TextStyle(
+                          color: report.status == ReportStatus.resuelto
+                              ? Colors.green
+                              : report.status == ReportStatus.enProceso
+                                  ? Colors.blue
+                                  : Colors.amber.shade700,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    onTap: () => _showReportDetail(report),
+                  ),
+                );
+              },
+            ),
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
+          const SizedBox(height: 32),
+
+          // Logout Action
+          ElevatedButton.icon(
+            onPressed: () async {
+              await AuthService().logout();
+              widget.onLogout();
+            },
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Cerrar Sesión'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // WIDGET HELPER: Header of categories
+  Widget _buildSectionHeader(String title) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Georgia',
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.secondaryColor,
+          ),
+        ),
+        Text(
+          'Ver todos',
+          style: TextStyle(color: AppTheme.primaryColor.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  // WIDGET HELPER: Recent horizontal card (looks like the image top scroll)
+  Widget _buildRecentCard(Report report) {
+    return GestureDetector(
+      onTap: () => _showReportDetail(report),
+      child: Container(
+        width: 220,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF261A12), // Dark card background matching the design
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title & Status Badge
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    report.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusBgColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    report.status.displayName,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            // Metadata row (Type, category & date)
-            Row(
-              children: [
-                Icon(
-                  isIncident ? Icons.report_gmailerrorred_rounded : Icons.search_rounded,
-                  size: 14,
-                  color: isIncident ? Colors.blue : Colors.teal,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  report.type.displayName,
-                  style: TextStyle(
-                    color: isIncident ? Colors.blue : Colors.teal,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text('•', style: TextStyle(color: Colors.grey)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    report.category,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.hintColor,
-                    ),
-                  ),
-                ),
-                Text(
-                  dateStr,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 16),
-
-            // Description
+            // Image holder with futuristic mesh glow styling representation
             Expanded(
-              child: Text(
-                report.description,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.brightness == Brightness.light ? Colors.black87 : Colors.white70,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF1E3A8A).withOpacity(0.5),
+                      const Color(0xFF3B82F6).withOpacity(0.2),
+                    ],
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.settings_input_hdmi_rounded,
+                    color: Colors.blue.shade200,
+                    size: 32,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 8),
-
-            // Footer (Location & optional Phone)
+            Text(
+              report.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+                const Icon(Icons.location_on_outlined, color: Colors.white60, size: 12),
                 const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    report.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.hintColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                Text(
+                  report.classroom,
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
                 ),
-                if (report.contactPhone != null && report.contactPhone!.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    report.contactPhone!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.secondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
               ],
             ),
           ],
@@ -496,239 +792,355 @@ class ReportCard extends StatelessWidget {
       ),
     );
   }
+
+  // WIDGET HELPER: Vertical category rows
+  Widget _buildCategoryCard(Report report, IconData icon, Color color) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(
+          report.title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        subtitle: Row(
+          children: [
+            const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(report.classroom, style: const TextStyle(fontSize: 11)),
+          ],
+        ),
+        trailing: const Text(
+          'Hace 2h', // Mock timing
+          style: TextStyle(fontSize: 11, color: Colors.grey),
+        ),
+        onTap: () => _showReportDetail(report),
+      ),
+    );
+  }
 }
 
-class CreateReportDialog extends StatefulWidget {
-  final ReportType initialType;
+// ----------------------------------------------------
+// BOTTOM SHEET DIALOG TO CREATE REPORTS OR LOST OBJECTS
+// ----------------------------------------------------
+class CreateReportBottomSheet extends StatefulWidget {
   final String reportedBy;
-  final Future<void> Function(
+  final Function(
     String title,
-    String description,
-    String location,
     ReportType type,
-    String category,
-    String? contactPhone,
+    ReportArea? area,
+    String classroom,
+    String building,
+    String details,
   ) onReportCreated;
 
-  const CreateReportDialog({
+  const CreateReportBottomSheet({
     super.key,
-    required this.initialType,
     required this.reportedBy,
     required this.onReportCreated,
   });
 
   @override
-  State<CreateReportDialog> createState() => _CreateReportDialogState();
+  State<CreateReportBottomSheet> createState() => _CreateReportBottomSheetState();
 }
 
-class _CreateReportDialogState extends State<CreateReportDialog> {
+class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   final _formKey = GlobalKey<FormState>();
-  late ReportType _type;
   final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _phoneController = TextEditingController();
-  String _category = 'General';
-  bool _isSaving = false;
+  final _classroomController = TextEditingController();
+  final _buildingController = TextEditingController();
+  final _detailsController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _type = widget.initialType;
-    _category = _type == ReportType.incidencia ? 'Infraestructura' : 'Artículos Personales';
-  }
+  ReportType _reportType = ReportType.incidencia;
+  ReportArea _reportArea = ReportArea.sistema;
+  bool _isSaving = false;
 
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
-    _locationController.dispose();
-    _phoneController.dispose();
+    _classroomController.dispose();
+    _buildingController.dispose();
+    _detailsController.dispose();
     super.dispose();
   }
 
-  void _save() async {
+  void _save() {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isSaving = true;
       });
 
-      try {
-        await widget.onReportCreated(
-          _titleController.text,
-          _descriptionController.text,
-          _locationController.text,
-          _type,
-          _category,
-          _type == ReportType.objetoPerdido ? _phoneController.text : null,
-        );
-        if (mounted) {
-          Navigator.pop(context);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al crear reporte: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isSaving = false;
-          });
-        }
-      }
+      widget.onReportCreated(
+        _titleController.text,
+        _reportType,
+        _reportType == ReportType.incidencia ? _reportArea : null,
+        _classroomController.text,
+        _buildingController.text,
+        _detailsController.text,
+      );
+
+      Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final categories = _type == ReportType.incidencia
-        ? ['Infraestructura', 'Tecnología', 'Limpieza', 'Seguridad', 'General']
-        : ['Artículos Personales', 'Documentos', 'Electrónicos', 'Libros', 'General'];
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    return AlertDialog(
-      scrollable: true,
-      title: Row(
-        children: [
-          Icon(
-            _type == ReportType.incidencia ? Icons.report_gmailerrorred_rounded : Icons.search_rounded,
-            color: _type == ReportType.incidencia ? Colors.blue : Colors.teal,
-          ),
-          const SizedBox(width: 8),
-          Text('Publicar ${_type.displayName}'),
-        ],
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF261D16) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 450),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: SingleChildScrollView(
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Segmented type selector
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Crear Nuevo Registro',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Report Type Segmented Button
               SegmentedButton<ReportType>(
                 segments: const [
                   ButtonSegment<ReportType>(
                     value: ReportType.incidencia,
                     label: Text('Incidencia'),
-                    icon: Icon(Icons.report_gmailerrorred_rounded),
                   ),
                   ButtonSegment<ReportType>(
                     value: ReportType.objetoPerdido,
                     label: Text('Objeto Perdido'),
-                    icon: Icon(Icons.search_rounded),
                   ),
                 ],
-                selected: {_type},
-                onSelectionChanged: (Set<ReportType> selection) {
+                selected: {_reportType},
+                onSelectionChanged: (selection) {
                   setState(() {
-                    _type = selection.first;
-                    _category = _type == ReportType.incidencia ? 'Infraestructura' : 'Artículos Personales';
+                    _reportType = selection.first;
                   });
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              // Title Field
+              // Title (Nombre)
+              const Text('Nombre del Reporte / Objeto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
               TextFormField(
                 controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: _type == ReportType.incidencia ? 'Título de la Incidencia' : 'Objeto Perdido',
-                  hintText: _type == ReportType.incidencia ? 'Ej: Gotera en laboratorio 3' : 'Ej: Mochila negra marca Jansport',
-                ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Ingresa un título' : null,
-              ),
-              const SizedBox(height: 16),
-
-              // Category Selector
-              DropdownButtonFormField<String>(
-                initialValue: _category,
                 decoration: const InputDecoration(
-                  labelText: 'Categoría',
+                  hintText: 'Ej: Licuadora descompuesta o Llaves de auto',
                 ),
-                items: categories.map((cat) {
-                  return DropdownMenuItem<String>(
-                    value: cat,
-                    child: Text(cat),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _category = val;
-                    });
-                  }
-                },
+                validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa el nombre' : null,
               ),
               const SizedBox(height: 16),
 
-              // Location Field
-              TextFormField(
-                controller: _locationController,
-                decoration: const InputDecoration(
-                  labelText: 'Ubicación / Aula',
-                  hintText: 'Ej: Edificio C, Segundo Piso, Aula 302',
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Ingresa la ubicación' : null,
-              ),
-              const SizedBox(height: 16),
-
-              // Contact Phone (Conditional for Lost Object)
-              if (_type == ReportType.objetoPerdido) ...[
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Teléfono de Contacto (Opcional)',
-                    hintText: 'Ej: 555-1234',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
+              // Area (Conditionally visible for Incidents)
+              if (_reportType == ReportType.incidencia) ...[
+                const Text('Área Responsable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<ReportArea>(
+                  initialValue: _reportArea,
+                  decoration: const InputDecoration(),
+                  items: ReportArea.values.map((area) {
+                    return DropdownMenuItem<ReportArea>(
+                      value: area,
+                      child: Text(area.displayName),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _reportArea = val;
+                      });
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // Description Field
+              // Classroom (Aula) and Building (Edificio)
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Edificio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _buildingController,
+                          decoration: const InputDecoration(hintText: 'Ej: Edificio C'),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Aula', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _classroomController,
+                          decoration: const InputDecoration(hintText: 'Ej: Aula 102'),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Details
+              const Text('Detalles del Reporte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
               TextFormField(
-                controller: _descriptionController,
+                controller: _detailsController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Descripción detallada',
-                  alignLabelWithHint: true,
+                  hintText: 'Explica los detalles sobre el incidente o el objeto extraviado...',
                 ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Ingresa una descripción' : null,
+                validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa los detalles' : null,
+              ),
+              const SizedBox(height: 24),
+
+              ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                child: const Text('Publicar Registro'),
               ),
             ],
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: _isSaving ? null : _save,
-          child: _isSaving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text('Publicar'),
-        ),
-      ],
+    );
+  }
+}
+
+// ----------------------------------------------------
+// BOTTOM SHEET DIALOG TO VIEW DETAILS OF ONE REPORT
+// ----------------------------------------------------
+class ReportDetailBottomSheet extends StatelessWidget {
+  final Report report;
+
+  const ReportDetailBottomSheet({super.key, required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final dateStr = '${report.dateTime.hour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')} - ${report.dateTime.day}/${report.dateTime.month}/${report.dateTime.year}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF261D16) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                report.type.displayName,
+                style: TextStyle(
+                  color: report.type == ReportType.incidencia ? Colors.blue : Colors.teal,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          Text(
+            report.title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+          ),
+          const SizedBox(height: 16),
+
+          // Detail parameters
+          _buildDetailRow(Icons.calendar_month_outlined, 'Fecha y Hora:', dateStr),
+          _buildDetailRow(Icons.location_on_outlined, 'Ubicación:', '${report.building}, ${report.classroom}'),
+          if (report.area != null)
+            _buildDetailRow(Icons.domain_outlined, 'Área responsable:', report.area!.displayName),
+          _buildDetailRow(Icons.person_outline_rounded, 'Reportado por:', report.reportedBy),
+          _buildDetailRow(Icons.info_outline, 'Estado:', report.status.displayName),
+
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          const Text(
+            'Detalles del Reporte:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.secondaryColor),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            report.details,
+            style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String title, String val) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              val,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
