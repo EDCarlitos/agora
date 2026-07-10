@@ -210,9 +210,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 ),
             ],
           ),
-          const CircleAvatar(
+          CircleAvatar(
             radius: 16,
-            backgroundImage: NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+            backgroundImage: widget.user.photoUrl != null 
+                ? NetworkImage(widget.user.photoUrl!) 
+                : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+            // Si no tiene foto de Google, muestra la de por defecto
           ),
           const SizedBox(width: 16),
         ],
@@ -269,8 +272,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final userIncidents = _viewModel.incidents.where((r) => r.reportedBy == widget.user.name).toList();
-
+    final userIncidents = _viewModel.incidents.toList();
     final listLimpieza = userIncidents.where((r) => r.area == ReportArea.limpieza).toList();
     final listSistemas = userIncidents.where((r) => r.area == ReportArea.sistema).toList();
     final listMantenimiento = userIncidents.where((r) => r.area == ReportArea.mantenimiento).toList();
@@ -643,9 +645,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 28,
-                    backgroundImage: NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+                    backgroundImage: widget.user.photoUrl != null 
+                        ? NetworkImage(widget.user.photoUrl!) 
+                        : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
                   ),
                   const SizedBox(width: 16),
                   Expanded(

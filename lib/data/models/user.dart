@@ -26,12 +26,14 @@ class User {
   final String name;
   final String email;
   final UserRole role;
+  final String? photoUrl;
 
   const User({
     required this.id,
     required this.name,
     required this.email,
     required this.role,
+    this.photoUrl,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {

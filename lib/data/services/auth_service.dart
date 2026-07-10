@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../models/user.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   // Singleton instance
@@ -10,7 +11,56 @@ class AuthService {
   User? _currentUser;
   User? get currentUser => _currentUser;
 
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  //Asignación de roles
+  UserRole _asignarRolPorCorreo(String email) {
+    final correo = email.trim().toLowerCase();
+
+    if (correo == 'bchapolrueda@gmail.com') {
+      return UserRole.estudiante;
+    }
+    if (correo == 'juancarlosuchdzib@gmail.com') {
+      return UserRole.estudiante;
+    }
+
+    if (_mockDatabase.containsKey(correo)) {
+      return _mockDatabase[correo]!.user.role;
+    }
+    return UserRole.estudiante; 
+  }
+
+  //Inicio con google
+  Future<User> loginWithGoogle() async {
+    try {
+      await _googleSignIn.initialize(
+        serverClientId: '899888080842-c4cgcpipjtrp5jillvme36qglr3j4kr6.apps.googleusercontent.com',
+      );
+      
+      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      
+      if (googleUser == null) {
+        throw Exception('Cancelaste el inicio de sesión con Google.');
+      }
+
+      final user = User(
+        id: googleUser.id,
+        name: googleUser.displayName ?? 'Usuario Google',
+        email: googleUser.email,
+        role: _asignarRolPorCorreo(googleUser.email), 
+        photoUrl: googleUser.photoUrl,
+      );
+      
+      _currentUser = user;
+      return user;
+    } catch (e) {
+      throw Exception('Error al conectar con Google: $e');
+    }
+  }
+
   // In-memory list of valid credentials and users
+  // ==========================================================
+  // BASE DE DATOS LOCAL DE PRUEBA
+  // ==========================================================
   final Map<String, ({String password, User user})> _mockDatabase = {
     'estudiante@univ.edu': (
       password: 'password',
@@ -59,7 +109,7 @@ class AuthService {
     ),
   };
 
-  /// Mimics network request latency and validates credentials.
+  // --- INICIO DE SESIÓN CON CORREO Y CONTRASEÑA ---
   Future<User> login(String email, String password) async {
     await Future.delayed(const Duration(milliseconds: 800));
 
@@ -74,7 +124,7 @@ class AuthService {
     throw Exception('Credenciales inválidas. Por favor intenta de nuevo.');
   }
 
-  /// Logs out the current user.
+  // --- CERRAR SESIÓN ---
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 300));
     _currentUser = null;

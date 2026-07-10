@@ -35,6 +35,30 @@ class LoginViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+  // boton de google
+  Future<User?> loginWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+   try {
+      final user = await _authService.loginWithGoogle();
+      return user;
+    } catch (e) {
+      final errorText = e.toString().replaceAll('Exception: ', '');
+      
+      if (errorText.contains('Cancelaste') || errorText.contains('canceled')) {
+        _errorMessage = null;
+      } else {
+        _errorMessage = errorText;
+      }
+      
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   /// Clears any active error message.
   void clearError() {

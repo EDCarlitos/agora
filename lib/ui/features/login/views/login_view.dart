@@ -3,6 +3,7 @@ import '../../../../data/models/user.dart';
 import '../../../core/theme.dart';
 import '../view_models/login_view_model.dart';
 
+
 class LoginView extends StatefulWidget {
   final Function(User) onLoginSuccess;
 
@@ -277,8 +278,8 @@ class _LoginViewState extends State<LoginView> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 40),
 
+                            const SizedBox(height: 16), // Espacio final
                             // Login Button
                             ElevatedButton(
                               onPressed: _viewModel.isLoading ? null : _submit,
@@ -304,7 +305,43 @@ class _LoginViewState extends State<LoginView> {
                                       ],
                                     ),
                             ),
-                            const SizedBox(height: 48),
+                            const SizedBox(height: 32),
+
+                            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                            // --- NUEVO: Separador ---
+                            Row(
+                              children: [
+                                Expanded(child: Divider(color: mutedColor)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text('O', style: TextStyle(color: mutedColor, fontSize: 12)),
+                                ),
+                                Expanded(child: Divider(color: mutedColor)),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+
+                            OutlinedButton.icon(
+                              onPressed: _viewModel.isLoading ? null : () async {
+                                // Aquí llamamos a la función REAL de Google
+                                final user = await _viewModel.loginWithGoogle();
+                                if (user != null && mounted) {
+                                  widget.onLoginSuccess(user);
+                                }
+                              },
+                              
+                              label: const Text('Ingresar con Google'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: textColor,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                side: BorderSide(color: mutedColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 32),
 
                             // Help/Contact footer
                             Wrap(
