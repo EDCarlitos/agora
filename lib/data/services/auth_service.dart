@@ -17,7 +17,7 @@ class AuthService {
     final correo = email.trim().toLowerCase();
 
     if (correo == 'bchapolrueda@gmail.com') {
-      return UserRole.estudiante;
+      return UserRole.administrador;
     }
     if (correo == 'juancarlosuchdzib@gmail.com') {
       return UserRole.estudiante;
@@ -58,9 +58,6 @@ class AuthService {
   }
 
   // In-memory list of valid credentials and users
-  // ==========================================================
-  // BASE DE DATOS LOCAL DE PRUEBA
-  // ==========================================================
   final Map<String, ({String password, User user})> _mockDatabase = {
     'estudiante@univ.edu': (
       password: 'password',
