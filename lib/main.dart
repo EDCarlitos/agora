@@ -1,3 +1,4 @@
+import 'package:agora/ui/features/admin/views/admin_dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'data/models/user.dart';
 import 'ui/core/theme.dart';
@@ -53,7 +54,7 @@ class _MyAppState extends State<MyApp> {
         onLogout: _logoutUser,
       );
     } else if (user.role == UserRole.administrador) {
-      return RoleDashboardStub(
+      return AdminDashboardView(
         user: user,
         onLogout: _logoutUser,
       );

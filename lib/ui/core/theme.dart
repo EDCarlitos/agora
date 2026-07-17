@@ -9,6 +9,11 @@ class AppTheme {
   static const Color errorColor = Color(0xFFDC2626); // Red for error states
   static const Color successColor = Color(0xFF16A34A); // Green for success/resolved
 
+  static const Color pendingColor = Color(0xFFF59E0B);
+  static const Color inProgressColor = Color(0xFF3B82F6);
+  static const Color resolvedColor = successColor;
+  static const Color textSecondary = Colors.black54;
+
   // Light Scheme
   static final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
