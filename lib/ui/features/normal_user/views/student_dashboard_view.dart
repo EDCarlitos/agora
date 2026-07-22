@@ -8,6 +8,7 @@ import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
 import 'chat_room_view.dart';
 import 'select_category_view.dart';
+import 'dart:io';
 
 class StudentDashboardView extends StatefulWidget {
   final User user;
@@ -65,7 +66,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               dateTime: DateTime.now(),
               details: details,
               reportedBy: widget.user.name,
-              imageUrl: imageUrl,
+              imagePath: imageUrl,
             );
           },
         ),
@@ -906,6 +907,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 // CREATE REPORT BOTTOM SHEET
 // ----------------------------------------------------
 class CreateReportBottomSheet extends StatefulWidget {
+  
   final String reportedBy;
   final ReportArea initialArea; // <-- AQUÍ RECIBE EL ÁREA DE LA PANTALLA ANTERIOR
   final Function(
@@ -938,9 +940,8 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
 
   late ReportArea _reportArea;
   String? _selectedSubtype;
-  
-  bool _isSaving = false;
   String? _selectedImageUrl;
+  bool _isSaving = false;
   bool _isUploading = false;
 
   final Map<ReportArea, List<String>> _subtypesOptions = {
@@ -974,35 +975,21 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
         source: ImageSource.gallery,
         imageQuality: 80,
       );
+
       if (file == null) return;
 
       setState(() {
-        _isUploading = true;
+        _selectedImageUrl = file.path; // Guardamos la RUTA LOCAL en la variable
       });
 
-      final bytes = await file.readAsBytes();
-      final url = await _cloudinaryService.uploadImageBytes(
-        bytes: bytes,
-        fileName: file.name,
-      );
-
-      setState(() {
-        _selectedImageUrl = url;
-      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al subir imagen: $e'),
+            content: Text('Error al seleccionar imagen: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-        });
       }
     }
   }
@@ -1132,7 +1119,6 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                 ],
               ),
               const SizedBox(height: 16),
-
               const Text('Imagen de Referencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               if (_isUploading)
@@ -1150,7 +1136,8 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         image: DecorationImage(
-                          image: NetworkImage(_selectedImageUrl!),
+                          // Usamos File de dart:io para leer la ruta local del teléfono
+                          image: FileImage(File(_selectedImageUrl!)), 
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -1173,6 +1160,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                     ),
                   ],
                 )
+// ... aquí sigue el OutlinedButton.icon original
               else
                 OutlinedButton.icon(
                   onPressed: _pickAndUploadImage,

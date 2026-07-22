@@ -1,194 +1,102 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/report.dart';
-import '../../../../data/services/local_database_service.dart';
+import '../../../../data/services/report_service.dart';
+import '../../../../data/services/auth_service.dart'; // Importante para obtener el token
 
 class StudentDashboardViewModel extends ChangeNotifier {
   static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
   factory StudentDashboardViewModel() => _instance;
-
+  
   StudentDashboardViewModel._internal() {
     loadReports();
   }
 
-  final LocalDatabaseService _db = LocalDatabaseService();
-
-  // In-memory list of reports initialized with working picsum.photos images
-  final List<Report> _reports = [
-    Report(
-      id: 'r1',
-      title: 'Proyector sin señal',
-      area: ReportArea.sistema,
-      classroom: 'Aula 302',
-      building: 'Edificio de Ingeniería',
-      dateTime: DateTime.now().subtract(const Duration(minutes: 45)),
-      details: 'El proyector muestra pantalla azul y dice "Sin Señal" al conectar el cable HDMI.',
-      status: ReportStatus.pendiente,
-      reportedBy: 'Carlos Estudiante',
-      imageUrl: 'https://picsum.photos/id/870/600/400', // Verified working ID
-    ),
-    Report(
-      id: 'r2',
-      title: 'Foco parpadeando',
-      area: ReportArea.mantenimiento,
-      classroom: 'Aula 101',
-      building: 'Edificio A',
-      dateTime: DateTime.now().subtract(const Duration(hours: 1)),
-      details: 'La lámpara fluorescente del centro parpadea constantemente interrumpiendo la clase.',
-      status: ReportStatus.pendiente,
-      reportedBy: 'Carlos Estudiante',
-      imageUrl: 'https://picsum.photos/id/250/600/400',
-    ),
-    Report(
-      id: 'r3',
-      title: 'Derrame en cafetería',
-      area: ReportArea.limpieza,
-      classroom: 'Cafetería Central',
-      building: 'Edificio Central',
-      dateTime: DateTime.now().subtract(const Duration(hours: 2)),
-      details: 'Se cayó un termo de café en el pasillo principal y está resbaloso.',
-      status: ReportStatus.enProceso,
-      reportedBy: 'Ana Estudiante',
-      imageUrl: 'https://picsum.photos/id/1084/600/400',
-    ),
-    Report(
-      id: 'r4',
-      title: 'Baños sucios',
-      area: ReportArea.limpieza,
-      classroom: 'Edificio A, Piso 1',
-      building: 'Edificio A',
-      dateTime: DateTime.now().subtract(const Duration(days: 1)),
-      details: 'Falta papel higiénico y limpieza general en los cubículos de caballeros.',
-      status: ReportStatus.pendiente,
-      reportedBy: 'Carlos Estudiante',
-      imageUrl: 'https://picsum.photos/id/364/600/400',
-    ),
-    Report(
-      id: 'r5',
-      title: 'Falla de WiFi',
-      area: ReportArea.sistema,
-      classroom: 'Biblioteca',
-      building: 'Edificio Central',
-      dateTime: DateTime.now().subtract(const Duration(hours: 4)),
-      details: 'La red UPQROO_Alumnos no permite conectarse ni asigna dirección IP.',
-      status: ReportStatus.pendiente,
-      reportedBy: 'Sofia Estudiante',
-      imageUrl: 'https://picsum.photos/id/60/600/400',
-    ),
-    Report(
-      id: 'r6',
-      title: 'Mesa de trabajo rota',
-      area: ReportArea.mantenimiento,
-      classroom: 'Biblioteca Central',
-      building: 'Edificio Central',
-      dateTime: DateTime.now().subtract(const Duration(days: 2)),
-      details: 'Una de las patas de madera de la mesa redonda del fondo está desprendida.',
-      status: ReportStatus.resuelto,
-      reportedBy: 'Pedro Alumno',
-      imageUrl: 'https://picsum.photos/id/20/600/400',
-    ),
-    Report(
-      id: 'r7',
-      title: 'Aire acondicionado goteando',
-      area: ReportArea.mantenimiento,
-      classroom: 'Aula 101',
-      building: 'Edificio A',
-      dateTime: DateTime.now().subtract(const Duration(days: 3)),
-      details: 'El minisplit del salón gotea agua directamente sobre las bancas de la primera fila.',
-      status: ReportStatus.pendiente,
-      reportedBy: 'Carlos Estudiante',
-      imageUrl: 'https://picsum.photos/id/370/600/400',
-    ),
-  ];
-
-  // In-memory list of mock notifications
-  final List<Map<String, dynamic>> notifications = [
-    {
-      'id': 'n1',
-      'title': 'Actualización de Reporte',
-      'body': 'Tu reporte "Derrame en cafetería" ha cambiado a En Proceso.',
-      'time': 'Hace 10 min',
-      'isRead': false,
-    },
-    {
-      'id': 'n2',
-      'title': 'Reporte Resuelto',
-      'body': 'La "Mesa de trabajo rota" en Biblioteca ha sido reparada.',
-      'time': 'Ayer',
-      'isRead': true,
-    }
-  ];
+  final ReportService _reportService = ReportService();
+  final List<Report> _reports = [];
+  
+  // Mantenemos las notificaciones mockeadas por ahora
+  final List<Map<String, dynamic>> notifications = [];
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
-
+  
   List<Report> get allReports => _reports;
+  List<Report> get incidents => _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-  /// Returns only incidents
-  List<Report> get incidents {
-    return _reports
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-  }
-
-  /// Filtered by user (for "Ver todos mis reportes")
   List<Report> getMyReports(String userName) {
-    return _reports.where((r) => r.reportedBy == userName).toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    // Por ahora filtramos asumiendo que el backend nos da los del usuario
+    return _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
   }
 
-  /// Adds a new report and saves it to local SQLite database as well
-  Future<void> addReport({
-    required String title,
-    ReportArea? area,
-    required String subtype, // Asegúrate de pedirlo aquí
-    required String classroom,
-    required String building,
-    required DateTime dateTime,
-    required String details,
-    required String reportedBy,
-    String? imageUrl,
-  }) async {
+  // --- CARGAR REPORTES DESDE LA API ---
+  Future<void> loadReports() async {
     _isLoading = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final newReport = Report(
-      id: 'r${_reports.length + 1}',
-      title: title.trim(),
-      area: area,
-      classroom: classroom.trim(),
-      building: building.trim(),
-      dateTime: dateTime,
-      details: details.trim(),
-      status: ReportStatus.pendiente,
-      reportedBy: reportedBy,
-      imageUrl: imageUrl,
-    );
-
-    // Save in RAM
-    _reports.insert(0, newReport);
-    
-    // Save in Local DB (SQLite via sqflite)
     try {
-      await _db.saveIncident(newReport);
+      final token = AuthService().token;
+      if (token != null) {
+        final apiReports = await _reportService.getReports(token);
+        _reports.clear();
+        
+        for (var jsonReport in apiReports) {
+          _reports.add(_mapBackendToReport(jsonReport));
+        }
+      }
     } catch (e) {
-      debugPrint('Error al guardar en base de datos local: $e');
+      debugPrint('Error al cargar reportes de API: $e');
     }
-
-    // Auto-generate a local notification for report creation
-    notifications.insert(0, {
-      'id': 'n${notifications.length + 1}',
-      'title': 'Reporte Creado',
-      'body': 'Has publicado exitosamente: "${newReport.title}".',
-      'time': 'Ahora mismo',
-      'isRead': false,
-    });
 
     _isLoading = false;
     notifyListeners();
   }
 
-  /// Marks notifications as read
+  // --- CREAR REPORTE EN LA API ---
+  Future<void> addReport({
+    required String title,
+    ReportArea? area,
+    required String subtype,
+    required String classroom,
+    required String building,
+    required DateTime dateTime,
+    required String details,
+    required String reportedBy,
+    String? imagePath, // Ahora recibimos un Path local, no una URL
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        // HACK: Empaquetamos los datos extra en la descripción para el backend actual
+        final fullDescription = "[$building - $classroom - ${area?.displayName} - $subtype]\n$details";
+
+        final newApiReport = await _reportService.createReport(
+          jwtToken: token,
+          titulo: title,
+          descripcion: fullDescription,
+          imagePath: imagePath, // Le pasamos la ruta para que la API lo suba a Cloudinary
+        );
+
+        _reports.insert(0, _mapBackendToReport(newApiReport));
+
+        notifications.insert(0, {
+          'id': 'n${notifications.length + 1}',
+          'title': 'Reporte Creado',
+          'body': 'Has publicado exitosamente: "$title".',
+          'time': 'Ahora mismo',
+          'isRead': false,
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al guardar en API: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
   void markNotificationsAsRead() {
     for (var n in notifications) {
       n['isRead'] = true;
@@ -196,51 +104,82 @@ class StudentDashboardViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadReports() async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final dbIncidents = await _db.getIncidents();
-      if (dbIncidents.isNotEmpty) {
-        _reports.clear();
-        _reports.addAll(dbIncidents);
-      } else {
-        // Pre-populate DB with mock items
-        for (var r in _reports) {
-          await _db.saveIncident(r);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error al cargar reportes de DB local: $e');
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
   Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl, String? evidenceUrl}) async {
+    // TODO: Falta el endpoint PUT/PATCH en el backend. Por ahora actualizamos en RAM.
     final index = _reports.indexWhere((r) => r.id == id);
     if (index != -1) {
-      final updatedReport = _reports[index].copyWith(
+      _reports[index] = _reports[index].copyWith(
         status: newStatus,
-        imageUrl: imageUrl ?? _reports[index].imageUrl,
-        evidenceUrl: evidenceUrl ?? _reports[index].evidenceUrl,
+        evidenceUrl: evidenceUrl,
       );
-      _reports[index] = updatedReport;
-      await _db.saveIncident(updatedReport);
-      
-      if (newStatus == ReportStatus.resuelto) {
-        notifications.insert(0, {
-          'id': 'n${notifications.length + 1}',
-          'title': 'Reporte Resuelto',
-          'body': 'Tu reporte "${updatedReport.title}" en ${updatedReport.classroom} ha sido completado.',
-          'time': 'Ahora mismo',
-          'isRead': false,
-        });
-      }
-      
       notifyListeners();
     }
+  }
+
+  // --- MAPPER: Backend JSON a Frontend Model ---
+  // --- MAPPER: Backend JSON a Frontend Model ---
+  // --- MAPPER: Backend JSON a Frontend Model ---
+  Report _mapBackendToReport(Map<String, dynamic> json) {
+    String? imageUrl;
+    
+    // 1. Extraemos la imagen de Cloudinary
+    if (json['imagenes'] != null && (json['imagenes'] as List).isNotEmpty) {
+      imageUrl = json['imagenes'][0]['url']; 
+    }
+
+    // REPORTANTE
+    String nombreReportante = 'Usuario Desconocido';
+    if (json['reportante'] != null) {
+      nombreReportante = json['reportante']['username'] ?? json['reportante']['email'] ?? 'Usuario';
+    }
+
+    // AULA
+    String aula = 'Aula no asignada';
+    if (json['aula'] != null) {
+      if (json['aula'] is Map<String, dynamic>) {
+        aula = json['aula']['nombre'] ?? 'Aula no asignada';
+      } else {
+        aula = json['aula'].toString();
+      }
+    }
+
+    // EDIFICIO
+    String edificio = 'Edificio no asignado';
+    if (json['aula'] != null && json['aula']['edificio'] != null) {
+      if (json['aula']['edificio'] is Map<String, dynamic>) {
+        edificio = json['aula']['edificio']['nombre'] ?? 'Edificio no asignado';
+      } else {
+        // Por si alguna vez mandan solo el texto en lugar del objeto
+        edificio = json['aula']['edificio'].toString();
+      }
+    }
+
+    // AREA
+    ReportArea areaInferida = ReportArea.sistema;
+    final tipoStr = (json['tipo'] ?? '').toLowerCase();
+    if (tipoStr.contains('limpieza') || tipoStr.contains('basura') || tipoStr.contains('derrame')) {
+      areaInferida = ReportArea.limpieza;
+    } else if (tipoStr.contains('silla') || tipoStr.contains('puerta') || tipoStr.contains('pizarrón')) {
+      areaInferida = ReportArea.mantenimiento;
+    }
+
+    // MODELO TOTAL
+    return Report(
+      id: json['id'].toString(),
+      title: json['titulo'] ?? 'Sin título',
+      area: areaInferida,
+      classroom: aula, 
+      building: edificio, 
+      dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']) : DateTime.now(),
+      details: json['descripcion'] ?? 'Sin detalles',
+      status: _parseStatus(json['estado']),
+      reportedBy: nombreReportante, 
+      imageUrl: imageUrl,
+    );
+  }
+  ReportStatus _parseStatus(String? status) {
+    if (status == 'ACEPTADO') return ReportStatus.enProceso;
+    if (status == 'RECHAZADO') return ReportStatus.resuelto;
+    return ReportStatus.pendiente; // 'NUEVO'
   }
 }

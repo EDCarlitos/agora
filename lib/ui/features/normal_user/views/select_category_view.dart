@@ -72,22 +72,6 @@ class _SelectCategoryViewState extends State<SelectCategoryView> {
               ),
               const SizedBox(height: 16),
               
-              _buildCategoryCard(
-                area: ReportArea.limpieza,
-                icon: Icons.auto_awesome_outlined,
-                title: 'Limpieza',
-                subtitle: 'Solicita atención en aulas, sanitarios o áreas comunes.',
-                isDark: isDark,
-              ),
-              const SizedBox(height: 16),
-
-              _buildCategoryCard(
-                area: ReportArea.mantenimiento,
-                icon: Icons.settings_outlined,
-                title: 'Mantenimiento',
-                subtitle: 'Reporta daños en mobiliario, infraestructura o instalaciones.',
-                isDark: isDark,
-              ),
 
               const Spacer(),
 

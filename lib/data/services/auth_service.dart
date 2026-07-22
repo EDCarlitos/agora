@@ -1,6 +1,9 @@
 import 'dart:async';
-import '../models/user.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
+import '../models/user.dart';
+import '../../utils/api_config.dart';
 
 class AuthService {
   // Singleton instance
@@ -9,121 +12,125 @@ class AuthService {
   AuthService._internal();
 
   User? _currentUser;
+  String? _jwtToken; 
+
   User? get currentUser => _currentUser;
+  String? get token => _jwtToken;
 
+  // 1. Respetamos tu instancia original de GoogleSignIn
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
-  //Asignación de roles
-  UserRole _asignarRolPorCorreo(String email) {
-    final correo = email.trim().toLowerCase();
 
-    if (correo == 'bchapolrueda@gmail.com') {
-      return UserRole.administrador;
-    }
-    if (correo == 'juancarlosuchdzib@gmail.com') {
-      return UserRole.estudiante;
-    }
-
-    if (_mockDatabase.containsKey(correo)) {
-      return _mockDatabase[correo]!.user.role;
-    }
-    return UserRole.estudiante; 
-  }
-
-  //Inicio con google
+  // --- INICIO DE SESIÓN CON GOOGLE Y TU API ---
   Future<User> loginWithGoogle() async {
     try {
+      // 2. Usamos tu método de inicialización
       await _googleSignIn.initialize(
         serverClientId: '899888080842-c4cgcpipjtrp5jillvme36qglr3j4kr6.apps.googleusercontent.com',
       );
       
-      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      // 3. Usamos tu método de autenticación
+      final googleUser = await _googleSignIn.authenticate();
       
-      if (googleUser == null) {
-        throw Exception('Cancelaste el inicio de sesión con Google.');
+
+      // 4. Extraemos el idToken para la API
+      final authentication = googleUser.authentication;
+      final String? idToken = authentication.idToken;
+
+      if (idToken == null) {
+        throw Exception('No se pudo obtener el token de Google para enviarlo al servidor.');
       }
 
-      final user = User(
-        id: googleUser.id,
-        name: googleUser.displayName ?? 'Usuario Google',
-        email: googleUser.email,
-        role: _asignarRolPorCorreo(googleUser.email), 
-        photoUrl: googleUser.photoUrl,
-      );
+      // 5. Enviamos el token a tu API en Docker
+      final url = Uri.parse('${ApiConfig.baseUrl}/auth/google/token');
       
-      _currentUser = user;
-      return user;
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'idToken': idToken}),
+      );
+
+      // 6. Procesamos la respuesta real de la base de datos
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        
+        // Guardamos el JWT
+        _jwtToken = data['token'];
+        
+        // Creamos el objeto User con la data del backend
+        final Map<String, dynamic> userData = data['user'];
+        _currentUser = User(
+          id: userData['id'].toString(),
+          name: userData['username'] ?? googleUser.displayName ?? 'Usuario',
+          email: userData['email'],
+          role: _parseRole(userData['role']),
+          photoUrl: googleUser.photoUrl,
+        );
+
+        return _currentUser!;
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? 'Error de autenticación en el servidor');
+      }
+
     } catch (e) {
-      throw Exception('Error al conectar con Google: $e');
+      throw Exception('Error al conectar con Google o la API: $e');
     }
   }
 
-  // In-memory list of valid credentials and users
-  final Map<String, ({String password, User user})> _mockDatabase = {
-    'estudiante@univ.edu': (
-      password: 'password',
-      user: const User(
-        id: '1',
-        name: 'Carlos Estudiante',
-        email: 'estudiante@univ.edu',
-        role: UserRole.estudiante,
-      ),
-    ),
-    'limpieza@univ.edu': (
-      password: 'password',
-      user: const User(
-        id: '2',
-        name: 'Ana Limpieza',
-        email: 'limpieza@univ.edu',
-        role: UserRole.limpieza,
-      ),
-    ),
-    'mantenimiento@univ.edu': (
-      password: 'password',
-      user: const User(
-        id: '3',
-        name: 'Pedro Mantenimiento',
-        email: 'mantenimiento@univ.edu',
-        role: UserRole.mantenimiento,
-      ),
-    ),
-    'sistemas@univ.edu': (
-      password: 'password',
-      user: const User(
-        id: '4',
-        name: 'Ing. Sofia Sistemas',
-        email: 'sistemas@univ.edu',
-        role: UserRole.sistemas,
-      ),
-    ),
-    'admin@univ.edu': (
-      password: 'password',
-      user: const User(
-        id: '5',
-        name: 'Lic. Gomez Administrador',
-        email: 'admin@univ.edu',
-        role: UserRole.administrador,
-      ),
-    ),
-  };
-
   // --- INICIO DE SESIÓN CON CORREO Y CONTRASEÑA ---
   Future<User> login(String email, String password) async {
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/auth/login');
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'emailOrUsername': email.trim(),
+          'password': password
+        }),
+      );
 
-    final normalizedEmail = email.trim().toLowerCase();
-    if (_mockDatabase.containsKey(normalizedEmail)) {
-      final record = _mockDatabase[normalizedEmail]!;
-      if (record.password == password) {
-        _currentUser = record.user;
-        return record.user;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _jwtToken = data['token'];
+        
+        final Map<String, dynamic> userData = data['user'];
+        _currentUser = User(
+          id: userData['id'].toString(),
+          name: userData['username'] ?? 'Usuario',
+          email: userData['email'],
+          role: _parseRole(userData['role']),
+        );
+
+        return _currentUser!;
+      } else {
+        throw Exception('Credenciales inválidas. Por favor intenta de nuevo.');
       }
+    } catch (e) {
+       throw Exception('Error al conectar con el servidor: $e');
     }
-    throw Exception('Credenciales inválidas. Por favor intenta de nuevo.');
   }
 
   // --- CERRAR SESIÓN ---
   Future<void> logout() async {
+    // Respetando tu implementación original de logout para evitar errores
     await Future.delayed(const Duration(milliseconds: 300));
     _currentUser = null;
+    _jwtToken = null;
+  }
+
+  // --- ASIGNACIÓN DE ROLES DESDE LA API ---
+  UserRole _parseRole(String? roleString) {
+    if (roleString == null) return UserRole.estudiante;
+    
+    switch (roleString.toUpperCase()) {
+      case 'ADMIN': return UserRole.administrador;
+      case 'SISTEMAS': return UserRole.sistemas;
+      case 'MANTENIMIENTO': return UserRole.mantenimiento;
+      case 'LIMPIEZA': return UserRole.limpieza;
+      case 'USER':
+      default: return UserRole.estudiante;
+    }
   }
 }
