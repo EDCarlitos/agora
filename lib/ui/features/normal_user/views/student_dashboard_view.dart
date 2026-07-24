@@ -36,9 +36,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
   @override
   void initState() {
-    super.initState();
+    super.initState();  
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _viewModel.loadReports();
+      _viewModel.loadChats();
     });
   }
 
