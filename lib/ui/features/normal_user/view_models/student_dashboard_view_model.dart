@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/services/report_service.dart';
 import '../../../../data/services/auth_service.dart'; // Importante para obtener el token
+import '../../../../data/services/notification_service.dart';
 
 class StudentDashboardViewModel extends ChangeNotifier {
   static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
@@ -9,12 +10,14 @@ class StudentDashboardViewModel extends ChangeNotifier {
   
   StudentDashboardViewModel._internal() {
     loadReports();
+    loadNotifications();
   }
 
   final ReportService _reportService = ReportService();
+  final NotificationService _notificationService = NotificationService();
   final List<Report> _reports = [];
   
-  // Mantenemos las notificaciones mockeadas por ahora
+  // Lista de notificaciones cargada dinámicamente desde el backend
   final List<Map<String, dynamic>> notifications = [];
 
   bool _isLoading = false;
@@ -26,6 +29,31 @@ class StudentDashboardViewModel extends ChangeNotifier {
   List<Report> getMyReports(String userName) {
     // Por ahora filtramos asumiendo que el backend nos da los del usuario
     return _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  }
+
+  // --- CARGAR NOTIFICACIONES DESDE LA API ---
+  Future<void> loadNotifications() async {
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        final apiNotifications = await _notificationService.getNotifications(token);
+        notifications.clear();
+        for (var n in apiNotifications) {
+          notifications.add({
+            'id': n['id'].toString(),
+            'title': n['titulo'] ?? 'Notificación',
+            'body': n['cuerpo'] ?? '',
+            'time': n['fechaCreacion'] != null
+                ? DateTime.parse(n['fechaCreacion']).toLocal().toString().substring(0, 16)
+                : 'Ahora',
+            'isRead': n['leida'] ?? false,
+          });
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error al cargar notificaciones desde la API: $e');
+    }
   }
 
   // --- CARGAR REPORTES DESDE LA API ---
@@ -42,6 +70,9 @@ class StudentDashboardViewModel extends ChangeNotifier {
         for (var jsonReport in apiReports) {
           _reports.add(_mapBackendToReport(jsonReport));
         }
+
+        // También cargamos las notificaciones al refrescar reportes
+        await loadNotifications();
       }
     } catch (e) {
       debugPrint('Error al cargar reportes de API: $e');
@@ -81,13 +112,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
 
         _reports.insert(0, _mapBackendToReport(newApiReport));
 
-        notifications.insert(0, {
-          'id': 'n${notifications.length + 1}',
-          'title': 'Reporte Creado',
-          'body': 'Has publicado exitosamente: "$title".',
-          'time': 'Ahora mismo',
-          'isRead': false,
-        });
+        await loadNotifications();
       }
     } catch (e) {
       debugPrint('Error al guardar en API: $e');
@@ -97,11 +122,16 @@ class StudentDashboardViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void markNotificationsAsRead() {
+  Future<void> markNotificationsAsRead() async {
     for (var n in notifications) {
       n['isRead'] = true;
     }
     notifyListeners();
+
+    final token = AuthService().token;
+    if (token != null) {
+      await _notificationService.markAllAsRead(token);
+    }
   }
 
   Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl, String? evidenceUrl}) async {

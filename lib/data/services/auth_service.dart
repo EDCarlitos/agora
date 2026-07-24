@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user.dart';
 import '../../utils/api_config.dart';
+import 'notification_service.dart';
 
 class AuthService {
   // Singleton instance
@@ -66,6 +67,9 @@ class AuthService {
           photoUrl: googleUser.photoUrl,
         );
 
+        // Registramos el token FCM del dispositivo en el backend
+        await NotificationService().registerDeviceToken(_jwtToken!);
+
         return _currentUser!;
       } else {
         final errorData = jsonDecode(response.body);
@@ -103,6 +107,9 @@ class AuthService {
           role: _parseRole(userData['role']),
         );
 
+        // Registramos el token FCM del dispositivo en el backend
+        await NotificationService().registerDeviceToken(_jwtToken!);
+
         return _currentUser!;
       } else {
         throw Exception('Credenciales inválidas. Por favor intenta de nuevo.');
@@ -114,7 +121,10 @@ class AuthService {
 
   // --- CERRAR SESIÓN ---
   Future<void> logout() async {
-    // Respetando tu implementación original de logout para evitar errores
+    if (_jwtToken != null) {
+      // Desvinculamos el token del dispositivo en el backend antes de borrar JWT
+      await NotificationService().unregisterDeviceToken(_jwtToken!);
+    }
     await Future.delayed(const Duration(milliseconds: 300));
     _currentUser = null;
     _jwtToken = null;

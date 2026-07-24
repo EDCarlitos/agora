@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "899888080842",
+    "project_id": "agora-26",
+    "storage_bucket": "agora-26.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:899888080842:android:e78473586c31ae88311133",
+        "android_client_info": {
+          "package_name": "com.example.agora"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "899888080842-jvtj8dvgg2grsa06qer6pn81nmrfcojd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.agora",
+            "certificate_hash": "0a836afd2c7cadac2f02258db35e376d65b3d3fc"
+          }
+        },
+        {
+          "client_id": "899888080842-rnbtrt1b11d10p2cgk5r8d21i0lb38g2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.agora",
+            "certificate_hash": "e74d107c4f796d655a79af124ee7f0fcf015de1a"
+          }
+        },
+        {
+          "client_id": "899888080842-c4cgcpipjtrp5jillvme36qglr3j4kr6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuyCqUAPm7d45uRXC-_oShh08NNJdzOvU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "899888080842-c4cgcpipjtrp5jillvme36qglr3j4kr6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

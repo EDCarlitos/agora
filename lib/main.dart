@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'data/models/user.dart';
+import 'data/services/notification_service.dart';
 import 'ui/core/theme.dart';
 import 'ui/features/login/views/login_view.dart';
 import 'ui/features/normal_user/views/student_dashboard_view.dart';
 import 'ui/features/other_roles/role_stubs.dart';
 import 'ui/features/staff/views/staff_dashboard_view.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().initialize();
   runApp(const MyApp());
 }
 
