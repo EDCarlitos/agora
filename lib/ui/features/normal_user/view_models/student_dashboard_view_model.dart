@@ -160,6 +160,10 @@ class StudentDashboardViewModel extends ChangeNotifier {
     if (json['imagenes'] != null && (json['imagenes'] as List).isNotEmpty) {
       imageUrl = json['imagenes'][0]['url']; 
     }
+    String? incId;
+    if (json['incidencia'] != null) {
+      incId = json['incidencia']['id'].toString();
+    }   
 
     // REPORTANTE
     String nombreReportante = 'Usuario Desconocido';
@@ -200,6 +204,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
     // MODELO TOTAL
     return Report(
       id: json['id'].toString(),
+      incidenciaId: incId, // <-- NUEVO
       title: json['titulo'] ?? 'Sin título',
       area: areaInferida,
       classroom: aula, 
@@ -207,7 +212,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
       dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']).toLocal() : DateTime.now(),
       details: json['descripcion'] ?? 'Sin detalles',
       status: _parseStatus(json['estado']),
-      reportedBy: nombreReportante, 
+      reportedBy: nombreReportante,
       imageUrl: imageUrl,
     );
   }

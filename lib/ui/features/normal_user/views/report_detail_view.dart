@@ -468,7 +468,6 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                               ),
                             ),
                           ),
-                          // --- LEYENDA "esperando respuesta" ---
                           if (_currentReport.status == ReportStatus.pendiente)
                             Padding(
                               padding: const EdgeInsets.only(top: 4.0),
