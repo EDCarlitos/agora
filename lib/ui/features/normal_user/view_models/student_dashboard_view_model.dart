@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../../data/models/user.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/services/report_service.dart';
 import '../../../../data/services/auth_service.dart'; // Importante para obtener el token
 import '../../../../data/services/notification_service.dart';
+import '../../../../data/services/aula_service.dart';
+import '../../../../data/services/chat_service.dart';
 
 class StudentDashboardViewModel extends ChangeNotifier {
   static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
@@ -16,6 +19,8 @@ class StudentDashboardViewModel extends ChangeNotifier {
   final ReportService _reportService = ReportService();
   final NotificationService _notificationService = NotificationService();
   final List<Report> _reports = [];
+  final ChatService _chatService = ChatService(); // <-- Instancia del nuevo servicio
+  final AulaService _aulaService = AulaService();
   
   // Lista de notificaciones cargada dinámicamente desde el backend
   final List<Map<String, dynamic>> notifications = [];
@@ -26,9 +31,15 @@ class StudentDashboardViewModel extends ChangeNotifier {
   List<Report> get allReports => _reports;
   List<Report> get incidents => _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-  List<Report> getMyReports(String userName) {
-    // Por ahora filtramos asumiendo que el backend nos da los del usuario
-    return _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  List<Report> getMyReports(User user) {
+    // Filtramos estrictamente bajo la condición de que el reportante
+    // coincida con el nombre de usuario o el correo de la sesión actual.
+    final filtered = _reports.where((r) => 
+      r.reportedBy == user.name || r.reportedBy == user.email
+    ).toList();
+    
+    filtered.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    return filtered;
   }
 
   // --- CARGAR NOTIFICACIONES DESDE LA API ---
@@ -85,14 +96,11 @@ class StudentDashboardViewModel extends ChangeNotifier {
   // --- CREAR REPORTE EN LA API ---
   Future<void> addReport({
     required String title,
-    ReportArea? area,
-    required String subtype,
-    required String classroom,
-    required String building,
-    required DateTime dateTime,
     required String details,
+    required int idEdificio,
+    required int idAula,
     required String reportedBy,
-    String? imagePath, // Ahora recibimos un Path local, no una URL
+    String? imagePath, 
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -100,18 +108,16 @@ class StudentDashboardViewModel extends ChangeNotifier {
     try {
       final token = AuthService().token;
       if (token != null) {
-        // HACK: Empaquetamos los datos extra en la descripción para el backend actual
-        final fullDescription = "[$building - $classroom - ${area?.displayName} - $subtype]\n$details";
-
         final newApiReport = await _reportService.createReport(
           jwtToken: token,
           titulo: title,
-          descripcion: fullDescription,
-          imagePath: imagePath, // Le pasamos la ruta para que la API lo suba a Cloudinary
+          descripcion: details,
+          idEdificio: idEdificio,
+          idAula: idAula, 
+          imagePath: imagePath,
         );
 
         _reports.insert(0, _mapBackendToReport(newApiReport));
-
         await loadNotifications();
       }
     } catch (e) {
@@ -146,8 +152,6 @@ class StudentDashboardViewModel extends ChangeNotifier {
     }
   }
 
-  // --- MAPPER: Backend JSON a Frontend Model ---
-  // --- MAPPER: Backend JSON a Frontend Model ---
   // --- MAPPER: Backend JSON a Frontend Model ---
   Report _mapBackendToReport(Map<String, dynamic> json) {
     String? imageUrl;
@@ -207,9 +211,79 @@ class StudentDashboardViewModel extends ChangeNotifier {
       imageUrl: imageUrl,
     );
   }
+  
   ReportStatus _parseStatus(String? status) {
     if (status == 'ACEPTADO') return ReportStatus.enProceso;
     if (status == 'RECHAZADO') return ReportStatus.resuelto;
     return ReportStatus.pendiente; // 'NUEVO'
+  }
+
+  List<dynamic> _aulasRaw = [];
+  List<dynamic> _edificios = [];
+  bool _isLoadingUbicaciones = false;
+
+  bool get isLoadingUbicaciones => _isLoadingUbicaciones;
+  List<dynamic> get edificios => _edificios;
+  List<dynamic> get aulasRaw => _aulasRaw;
+
+  Future<void> loadUbicaciones() async {
+    // Si ya las cargamos antes, no hacemos la petición de nuevo
+    if (_aulasRaw.isNotEmpty) return; 
+
+    _isLoadingUbicaciones = true;
+    notifyListeners();
+
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        _aulasRaw = await _aulaService.getAulas(token);
+        
+        // Extraer edificios únicos
+        final Map<int, dynamic> edificiosMap = {};
+        for (var aula in _aulasRaw) {
+          final edif = aula['edificio'];
+          if (edif != null) {
+            edificiosMap[edif['id']] = edif;
+          }
+        }
+        _edificios = edificiosMap.values.toList();
+      }
+    } catch (e) {
+      debugPrint('Error al cargar ubicaciones: $e');
+    }
+
+    _isLoadingUbicaciones = false;
+    notifyListeners();
+  }
+
+  // ==========================================
+  // --- CHATS DESDE LA API ---
+  // ==========================================
+  List<dynamic> _chats = [];
+  bool _isLoadingChats = false;
+
+  List<dynamic> get chats => _chats;
+  bool get isLoadingChats => _isLoadingChats;
+
+  Future<void> loadChats() async {
+    _isLoadingChats = true;
+    notifyListeners();
+
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        _chats = await _chatService.getChats(token);
+      }
+    } catch (e) {
+      debugPrint('Error al cargar chats de API: $e');
+    }
+
+    _isLoadingChats = false;
+    notifyListeners();
+  }
+  
+  // Filtrar aulas dependiendo del edificio seleccionado
+  List<dynamic> getAulasPorEdificio(int edificioId) {
+    return _aulasRaw.where((a) => a['idEdificio'] == edificioId).toList();
   }
 }
