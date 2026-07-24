@@ -16,11 +16,37 @@ class StudentIncidentsTab extends StatelessWidget {
     required this.onSeeAllChats,
   });
 
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final localReportDate = dateTime.toLocal();
+    final difference = now.difference(localReportDate);
+
+    if (difference.inMinutes < 1) {
+      return 'Hace un momento';
+    } else if (difference.inMinutes < 60) {
+      return 'Hace ${difference.inMinutes} min';
+    } else if (difference.inHours < 24) {
+      return 'Hace ${difference.inHours} h';
+    } else if (difference.inDays == 1) {
+      return 'Hace 1 día';
+    } else {
+      return 'Hace ${difference.inDays} días';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final userIncidents = viewModel.incidents.toList();
+    
+    final allIncidents = viewModel.incidents.toList();
+    final now = DateTime.now();
+
+    final recentIncidents = allIncidents.where((r) {
+      final localDate = r.dateTime.toLocal();
+      final difference = now.difference(localDate);
+      return difference.inHours <= 24;
+    }).take(5).toList(); 
 
     return SingleChildScrollView(
       child: Column(
@@ -61,14 +87,19 @@ class StudentIncidentsTab extends StatelessWidget {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 180,
-                  child: userIncidents.isEmpty
-                      ? const Center(child: Text('No hay reportes', style: TextStyle(color: Colors.white70)))
+                  child: recentIncidents.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No hay reportes en las últimas 24h',
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                        )
                       : ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: userIncidents.take(4).length,
+                          itemCount: recentIncidents.length,
                           itemBuilder: (context, index) {
-                            final item = userIncidents[index];
+                            final item = recentIncidents[index];
                             return _buildRecentCard(item);
                           },
                         ),
@@ -83,17 +114,18 @@ class StudentIncidentsTab extends StatelessWidget {
               children: [
                 _buildSectionHeader('Incidencias de Sistemas'),
                 const SizedBox(height: 8),
-                if (userIncidents.isEmpty)
+                if (allIncidents.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12.0),
                     child: Text('No hay reportes activos.'),
                   )
                 else
-                  ...userIncidents.map((r) => ReportCard(
+                  ...allIncidents.map((r) => ReportCard(
                         report: r,
                         icon: Icons.computer_outlined,
                         iconColor: const Color(0xFF3B82F6),
                         isDark: isDark,
+                        trailingText: _getTimeAgo(r.dateTime),
                         onTap: () => onShowDetail(r),
                       )),
               ],
