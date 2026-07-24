@@ -74,8 +74,9 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     try {
       final token = AuthService().token;
       if (token == null) return;
-      
-      final incidenciaId = int.parse(widget.report.id); // Pasamos el ID de incidencia en el mockReport
+
+      final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
+      final incidenciaId = int.parse(incidenciaIdStr);
       final chatData = await _chatService.getChatDetail(token, incidenciaId);
 
       final msgsJson = chatData['mensajes'] as List;
@@ -146,7 +147,8 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
     try {
       final token = AuthService().token!;
-      final incidenciaId = int.parse(widget.report.id);
+      final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
+      final incidenciaId = int.parse(incidenciaIdStr);
       final tipo = imagePath != null ? 'imagen' : 'mensaje';
 
       final newMsgJson = await _chatService.sendMessage(

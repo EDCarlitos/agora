@@ -34,6 +34,7 @@ enum ReportArea {
 
 class Report {
   final String id;
+  final String? incidenciaId;
   final String title; // Nombre del reporte
   final ReportArea? area; // Area (sistema, limpieza, mantenimiento)
   final String classroom; // Aula
@@ -48,6 +49,7 @@ class Report {
   const Report({
     required this.id,
     required this.title,
+    this.incidenciaId,
     this.area,
     required this.classroom,
     required this.building,
@@ -61,6 +63,7 @@ class Report {
 
   Report copyWith({
     String? id,
+    String? incidenciaId,
     String? title,
     ReportArea? area,
     String? classroom,
@@ -74,6 +77,7 @@ class Report {
   }) {
     return Report(
       id: id ?? this.id,
+      incidenciaId: incidenciaId ?? this.incidenciaId,
       title: title ?? this.title,
       area: area ?? this.area,
       classroom: classroom ?? this.classroom,

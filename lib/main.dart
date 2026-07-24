@@ -7,7 +7,7 @@ import 'ui/core/theme.dart';
 import 'ui/features/login/views/login_view.dart';
 import 'ui/features/normal_user/views/student_dashboard_view.dart';
 import 'ui/features/other_roles/role_stubs.dart';
-import 'ui/features/staff/views/staff_dashboard_view.dart';
+import 'ui/features/system/views/systems_dashboard_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,21 +94,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Widget _getDashboardForUser(User user) {
-    if (user.role == UserRole.estudiante) {
-      return StudentDashboardView(
-        user: user,
-        onLogout: _logoutUser,
-      );
-    } else if (user.role == UserRole.administrador) {
-      return RoleDashboardStub(
-        user: user,
-        onLogout: _logoutUser,
-      );
-    } else {
-      return StaffDashboardView(
-        user: user,
-        onLogout: _logoutUser,
-      );
+    switch (user.role) {
+      case UserRole.estudiante:
+        return StudentDashboardView(
+          user: user,
+          onLogout: _logoutUser,
+        );
+      case UserRole.sistemas:
+        return SystemsDashboardView(
+          user: user,
+          onLogout: _logoutUser,
+        );
+      case UserRole.administrador:
+        return RoleDashboardStub(
+          user: user,
+          onLogout: _logoutUser,
+        );
+      default:
+        // El 'default' es obligatorio para que Flutter sepa que NUNCA retornarás null
+        return RoleDashboardStub(
+          user: user,
+          onLogout: _logoutUser,
+        );
     }
   }
 }
