@@ -204,7 +204,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
       area: areaInferida,
       classroom: aula, 
       building: edificio, 
-      dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']) : DateTime.now(),
+      dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']).toLocal() : DateTime.now(),
       details: json['descripcion'] ?? 'Sin detalles',
       status: _parseStatus(json['estado']),
       reportedBy: nombreReportante, 
