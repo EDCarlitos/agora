@@ -7,6 +7,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../utils/api_config.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
+  debugPrint('Notificación FCM recibida en segundo plano: ${message.notification?.title}');
+}
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -27,8 +35,23 @@ class NotificationService {
       _isFirebaseInitialized = true;
       _messaging = FirebaseMessaging.instance;
 
-      // Solicitar permisos en iOS y Web
-      await _messaging?.requestPermission(
+      // Registrar handler para segundo plano / app cerrada
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+      // Solicitar permisos en Android 13+, iOS y Web
+      NotificationSettings? settings = await _messaging?.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+      debugPrint('Estado de permisos de notificación: ${settings?.authorizationStatus}');
+
+      // Mostrar alertas en primer plano (foreground)
+      await _messaging?.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
@@ -36,6 +59,7 @@ class NotificationService {
 
       // Obtención inicial del token
       _cachedFcmToken = await getDeviceToken();
+      debugPrint('Token FCM obtenido: $_cachedFcmToken');
 
       // Escuchar renovaciones de token
       _messaging?.onTokenRefresh.listen((newToken) {
