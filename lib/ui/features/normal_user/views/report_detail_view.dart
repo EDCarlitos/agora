@@ -188,14 +188,24 @@ class _ReportDetailViewState extends State<ReportDetailView> {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
+    
     final ampm = _currentReport.dateTime.hour >= 12 ? 'PM' : 'AM';
     final displayHour = _currentReport.dateTime.hour > 12 
         ? _currentReport.dateTime.hour - 12 
         : (_currentReport.dateTime.hour == 0 ? 12 : _currentReport.dateTime.hour);
+        
     final dateStr = '${displayHour.toString().padLeft(2, '0')}:${_currentReport.dateTime.minute.toString().padLeft(2, '0')} $ampm, ${_currentReport.dateTime.day} ${months[_currentReport.dateTime.month - 1]} ${_currentReport.dateTime.year}';
 
     final isStaff = widget.currentUser.role != UserRole.estudiante;
     final isResolved = _currentReport.status == ReportStatus.resuelto;
+
+    // --- NUEVA LÓGICA DE PERMISOS ---
+    // Verificamos si el usuario actual es el creador del reporte
+    final isMyReport = _currentReport.reportedBy == widget.currentUser.name ||
+                       _currentReport.reportedBy == widget.currentUser.email;
+    
+    // Solo mostramos los botones de acción si es personal técnico o si es su propio reporte
+    final showActionPanel = isStaff || isMyReport;
 
     return Scaffold(
       backgroundColor: canvasBg,
@@ -246,7 +256,6 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                         )
                       : null,
                 ),
-
                 Container(
                   transform: Matrix4.translationValues(0.0, -18.0, 0.0),
                   decoration: BoxDecoration(
@@ -277,10 +286,10 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: isResolved
-                                  ? Colors.green.shade600.withValues(alpha: 0.15)
+                                  ? Colors.green.shade600.withOpacity(0.15)
                                   : _currentReport.status == ReportStatus.enProceso
-                                      ? Colors.blue.shade600.withValues(alpha: 0.15)
-                                      : AppTheme.primaryColor.withValues(alpha: 0.15),
+                                      ? Colors.blue.shade600.withOpacity(0.15)
+                                      : AppTheme.primaryColor.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -299,7 +308,6 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                         ],
                       ),
                       const SizedBox(height: 16),
-
                       if (_currentReport.area != null)
                         _buildMetaIconRow(
                           Icons.local_offer_outlined,
@@ -325,7 +333,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                       const SizedBox(height: 16),
                       const Divider(color: Color(0xFFEFEBE7)),
                       const SizedBox(height: 16),
-
+                      
                       const Text(
                         'Detalles del Incidente',
                         style: TextStyle(
@@ -345,7 +353,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                         ),
                       ),
 
-                      // New Section: Resolution Evidence
+                      // Resolution Evidence
                       if (isResolved && _currentReport.evidenceUrl != null) ...[
                         const SizedBox(height: 24),
                         const Divider(color: Color(0xFFEFEBE7)),
@@ -383,80 +391,108 @@ class _ReportDetailViewState extends State<ReportDetailView> {
               ],
             ),
           ),
-
-          // Bottom Action Buttons Panel
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1C140E) : Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, -3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Resolve button for staff when pending/in-progress
-                  if (isStaff && !isResolved) ...[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _isResolving ? null : _resolveReport,
-                        icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                        label: const Text('Resolver'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.green.shade600,
-                          side: BorderSide(color: Colors.green.shade600),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+          
+          // --- PANEL DE BOTONES CONDICIONADO ---
+          if (showActionPanel)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, -3),
                     ),
-                    const SizedBox(width: 12),
                   ],
-                  // Main Chat Room button
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChatRoomView(
-                              report: _currentReport,
-                              currentUser: widget.currentUser,
+                ),
+                child: Row(
+                  children: [
+                    // Resolve button for staff when pending/in-progress
+                    if (isStaff && !isResolved) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isResolving ? null : _resolveReport,
+                          icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                          label: const Text('Resolver'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green.shade600,
+                            side: BorderSide(color: Colors.green.shade600),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.forum_outlined, size: 18),
-                      label: Text(isResolved ? 'Ver Chat' : 'Abrir Chat de Soporte'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                    ],
+                    // Main Chat Room button
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min, // Para no empujar el layout
+                        children: [
+                          SizedBox(
+                            width: double.infinity, // Para que el botón ocupe todo el ancho
+                            child: ElevatedButton.icon(
+                              // --- CONDICIÓN PARA 
+                              onPressed: _currentReport.status == ReportStatus.pendiente
+                                  ? null // null deshabilita el botón visual y funcionalmente
+                                  : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ChatRoomView(
+                                            report: _currentReport,
+                                            currentUser: widget.currentUser,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              icon: const Icon(Icons.forum_outlined, size: 18),
+                              label: Text(isResolved ? 'Ver Chat' : 'Abrir Chat de Soporte'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                // Color para cuando está deshabilitado
+                                disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.3),
+                                disabledForegroundColor: Colors.white.withOpacity(0.7),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // --- LEYENDA "esperando respuesta" ---
+                          if (_currentReport.status == ReportStatus.pendiente)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text(
+                                'En espera de que el personal técnico responda.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.white54 : Colors.black54,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
 
           // Resolution progress overlay
           if (_isResolving)
             Container(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withOpacity(0.5),
               child: const Center(
                 child: Card(
                   child: Padding(

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
-import '../../../../data/services/cloudinary_service.dart';
+import '../../../../data/services/chat_service.dart';
+import '../../../../data/services/auth_service.dart';
 import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
 
@@ -12,8 +13,6 @@ class Message {
   final bool isOutgoing;
   final DateTime time;
   final String? imageUrl;
-  final bool isAudio;
-  final String? audioDuration;
   final bool isSystem;
 
   Message({
@@ -21,8 +20,6 @@ class Message {
     required this.isOutgoing,
     required this.time,
     this.imageUrl,
-    this.isAudio = false,
-    this.audioDuration,
     this.isSystem = false,
   });
 }
@@ -45,23 +42,22 @@ class _ChatRoomViewState extends State<ChatRoomView> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
-  final List<Message> _messages = [];
+  
+  List<Message> _messages = [];
+  bool _isLoading = true;
   bool _isTyping = false;
-  List<String> _quickReplies = [];
   
   late ReportStatus _currentReportStatus;
-  bool _isResolving = false;
-
   final _picker = ImagePicker();
-  final _cloudinaryService = CloudinaryService();
-  final _viewModel = StudentDashboardViewModel(); // Shared singleton instance
+  
+  final _chatService = ChatService();
+  final _viewModel = StudentDashboardViewModel(); 
 
   @override
   void initState() {
     super.initState();
     _currentReportStatus = widget.report.status;
-    _loadInitialMessages();
-    _loadQuickReplies();
+    _loadChatData();
   }
 
   @override
@@ -72,117 +68,58 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     super.dispose();
   }
 
-  void _loadQuickReplies() {
-    final area = widget.report.area;
-    final isStaff = widget.currentUser.role != UserRole.estudiante;
+  // --- 1. CARGAR DATOS DESDE LA API ---
+  void _loadChatData() async {
+    try {
+      final token = AuthService().token;
+      if (token == null) return;
+      
+      final incidenciaId = int.parse(widget.report.id); // Pasamos el ID de incidencia en el mockReport
+      final chatData = await _chatService.getChatDetail(token, incidenciaId);
 
-    if (isStaff) {
-      _quickReplies = [
-        'Ya voy en camino',
-        'Necesito más información',
-        'Revisión completada',
-        'Favor de confirmar solución',
-      ];
-    } else {
-      if (area == ReportArea.sistema) {
-        _quickReplies = [
-          '¿Hay alguna novedad?',
-          'Ya reinicié el router',
-          'Sigo sin red',
-          '¡Muchas gracias por resolverlo!',
-        ];
-      } else if (area == ReportArea.mantenimiento) {
-        _quickReplies = [
-          '¿A qué hora vendrán?',
-          'Sigue goteando',
-          '¿Ocupan más fotos?',
-          'Entendido, gracias',
-        ];
-      } else {
-        _quickReplies = [
-          'Ya se encuentra limpio',
-          'Falta jabón/papel',
-          'Gracias por atenderlo',
-          '¿Cuándo pasarán?',
-        ];
+      final msgsJson = chatData['mensajes'] as List;
+      
+      setState(() {
+        // Mensaje inicial de sistema para dar contexto visual
+        _messages.add(
+          Message(
+            text: 'Conectado al chat de soporte para el reporte en ${widget.report.classroom}.',
+            isOutgoing: false,
+            time: DateTime.now(),
+            isSystem: true,
+          )
+        );
+        
+        // Mapear los mensajes de la API
+        _messages.addAll(msgsJson.map((m) => _parseApiMessage(m)).toList());
+        _isLoading = false;
+      });
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint('Error al cargar chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar el historial: $e')),
+        );
       }
     }
   }
 
-  void _loadInitialMessages() {
-    // 1. System banner for report info
-    _messages.add(
-      Message(
-        text: 'Reporte: "${widget.report.title}" en ${widget.report.classroom} (${widget.report.building}). Estado: ${_currentReportStatus.name.toUpperCase()}',
-        isOutgoing: false,
-        time: widget.report.dateTime,
-        isSystem: true,
-      ),
+  // Mapea el JSON de la BD a nuestra clase Message
+  Message _parseApiMessage(Map<String, dynamic> m) {
+    final enviadoPor = m['enviadoPor'];
+    // Validar si fue enviado por nosotros comparando username o email
+    final isOutgoing = (enviadoPor == widget.currentUser.name || enviadoPor == widget.currentUser.email);
+    final isImagen = m['tipo'] == 'imagen';
+
+    return Message(
+      text: isImagen ? '' : m['mensaje'],
+      imageUrl: isImagen ? m['mensaje'] : null,
+      isOutgoing: isOutgoing,
+      time: DateTime.parse(m['fechaEnvio']).toLocal(),
     );
-
-    // 2. If the user attached an image during creation, show it in the chat
-    if (widget.report.imageUrl != null && widget.report.imageUrl!.isNotEmpty) {
-      _messages.add(
-        Message(
-          text: 'Imagen de referencia adjunta al reporte original.',
-          isOutgoing: true,
-          time: widget.report.dateTime,
-          imageUrl: widget.report.imageUrl,
-        ),
-      );
-    }
-
-    // 3. Initial greeting from the corresponding department
-    final areaName = widget.report.area == ReportArea.sistema
-        ? 'Sistemas'
-        : widget.report.area == ReportArea.mantenimiento
-            ? 'Mantenimiento'
-            : 'Limpieza';
-
-    final agentName = widget.report.area == ReportArea.sistema
-        ? 'Ing. Daniel Ramos'
-        : widget.report.area == ReportArea.mantenimiento
-            ? 'Ing. Carlos Gómez'
-            : 'Coordinadora María Elena';
-
-    _messages.add(
-      Message(
-        text: 'Hola. Recibimos tu reporte sobre "${widget.report.title}" para el área de $areaName. Soy el técnico asignado ($agentName) y estaré dándole seguimiento a tu caso a través de este chat.',
-        isOutgoing: false,
-        time: widget.report.dateTime.add(const Duration(minutes: 2)),
-      ),
-    );
-
-    // 4. If the report is resolved and has evidence, load the resolution messages
-    if (_currentReportStatus == ReportStatus.resuelto) {
-      _messages.add(
-        Message(
-          text: 'Reporte marcado como RESUELTO por el técnico. Evidencia de resolución cargada con éxito a Cloudinary.',
-          isOutgoing: false,
-          time: widget.report.dateTime.add(const Duration(hours: 1)),
-          isSystem: true,
-        ),
-      );
-
-      if (widget.report.evidenceUrl != null && widget.report.evidenceUrl!.isNotEmpty) {
-        _messages.add(
-          Message(
-            text: 'Evidencia de trabajo terminado:',
-            isOutgoing: false,
-            time: widget.report.dateTime.add(const Duration(hours: 1, minutes: 1)),
-            imageUrl: widget.report.evidenceUrl,
-          ),
-        );
-      }
-
-      _messages.add(
-        Message(
-          text: 'He terminado de atender el reporte y adjunté la foto de evidencia. Si todo está correcto, daremos por concluido este caso. ¡Saludos!',
-          isOutgoing: false,
-          time: widget.report.dateTime.add(const Duration(hours: 1, minutes: 2)),
-        ),
-      );
-    }
   }
 
   void _scrollToBottom() {
@@ -195,82 +132,43 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     }
   }
 
-  void _sendMessage({String? text, String? imageUrl, bool isAudio = false, String? audioDuration, bool isSystem = false}) {
-    final messageText = text ?? _textController.text.trim();
-    if (messageText.isEmpty && imageUrl == null && !isAudio && !isSystem) return;
+  // --- 2. ENVIAR MENSAJE ---
+  Future<void> _sendMessage({String? text, String? imagePath}) async {
+    final msgText = text ?? _textController.text.trim();
+    if (msgText.isEmpty && imagePath == null) return;
 
-    if (text == null && !isSystem) {
+    if (imagePath == null) {
       _textController.clear();
     }
+    
+    setState(() => _isTyping = true);
 
-    // If a message is typed in this view, it is outgoing (from the currentUser's perspective)
-    final actualOutgoing = !isSystem ? true : false; 
+    try {
+      final token = AuthService().token!;
+      final incidenciaId = int.parse(widget.report.id);
+      final tipo = imagePath != null ? 'imagen' : 'mensaje';
 
-
-    setState(() {
-      _messages.add(
-        Message(
-          text: messageText,
-          isOutgoing: actualOutgoing,
-          time: DateTime.now(),
-          imageUrl: imageUrl,
-          isAudio: isAudio,
-          audioDuration: audioDuration,
-          isSystem: isSystem,
-        ),
+      final newMsgJson = await _chatService.sendMessage(
+        jwtToken: token,
+        incidenciaId: incidenciaId,
+        tipo: tipo,
+        contenido: imagePath == null ? msgText : null,
+        imagePath: imagePath,
       );
-    });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-
-    // Only trigger bot auto-reply if the student is typing and report is not resolved
-    if (widget.currentUser.role == UserRole.estudiante && _currentReportStatus != ReportStatus.resuelto && !isSystem) {
-      _triggerAutoReply(messageText, imageUrl != null, isAudio);
-    }
-  }
-
-  void _triggerAutoReply(String userMsg, bool isImage, bool isAudio) {
-    setState(() {
-      _isTyping = true;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-
-    final delayMillis = 1500 + (userMsg.length * 12).clamp(0, 1500);
-
-    Timer(Duration(milliseconds: delayMillis), () {
-      if (!mounted) return;
       setState(() {
+        _messages.add(_parseApiMessage(newMsgJson));
         _isTyping = false;
-
-        String replyText = '';
-        final query = userMsg.toLowerCase();
-
-        if (isImage) {
-          replyText = 'Gracias por la imagen de referencia. Ya la agregamos al expediente del reporte para que el personal técnico la revise.';
-        } else if (isAudio) {
-          replyText = 'Mensaje de voz recibido. Nuestro operador de soporte técnico lo escuchará en un momento y te dará respuesta.';
-        } else if (query.contains('hola') || query.contains('buen')) {
-          replyText = '¡Hola! ¿En qué más te puedo asistir con respecto a este reporte?';
-        } else if (query.contains('gracias') || query.contains('excelente')) {
-          replyText = '¡De nada! Estamos para servirte. Mantendremos el estado del reporte actualizado.';
-        } else if (query.contains('novedad') || query.contains('actualizaci') || query.contains('saber')) {
-          replyText = 'El personal técnico ya está asignado al problema en ${widget.report.classroom}. Te notificaremos por este medio cuando se resuelva.';
-        } else if (query.contains('urgente') || query.contains('rapido') || query.contains('rápido')) {
-          replyText = 'Entendido. He reportado la urgencia al supervisor de área para agilizar la orden de servicio.';
-        } else {
-          replyText = 'Recibido. He actualizado el registro del reporte con tu comentario.';
-        }
-
-        _messages.add(
-          Message(
-            text: replyText,
-            isOutgoing: false,
-            time: DateTime.now(),
-          ),
-        );
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-    });
+    } catch (e) {
+      setState(() => _isTyping = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al enviar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _showAttachmentMenu() {
@@ -289,13 +187,6 @@ class _ChatRoomViewState extends State<ChatRoomView> {
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
-              ),
-            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -310,7 +201,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 ),
               ),
               Text(
-                'Enviar Adjunto para Reporte',
+                'Enviar Adjunto',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -319,54 +210,26 @@ class _ChatRoomViewState extends State<ChatRoomView> {
               ),
               const SizedBox(height: 24),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildAttachmentOption(
                     icon: Icons.camera_alt_rounded,
                     label: 'Cámara',
                     color: Colors.blue.shade600,
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      _sendMessage(
-                        text: 'Evidencia fotográfica en tiempo real.',
-                        imageUrl: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=400&auto=format&fit=crop&q=80',
-                      );
+                      final file = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                      if (file != null) _sendMessage(imagePath: file.path);
                     },
                   ),
                   _buildAttachmentOption(
                     icon: Icons.image_rounded,
                     label: 'Galería',
                     color: AppTheme.primaryColor,
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      _sendMessage(
-                        text: 'Foto de referencia adjunta.',
-                        imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=400&auto=format&fit=crop&q=80',
-                      );
-                    },
-                  ),
-                  _buildAttachmentOption(
-                    icon: Icons.audiotrack_rounded,
-                    label: 'Audio',
-                    color: Colors.green.shade600,
-                    onTap: () {
-                      Navigator.pop(context);
-                      _sendMessage(
-                        text: 'Nota de voz enviada',
-                        isAudio: true,
-                        audioDuration: '0:12',
-                      );
-                    },
-                  ),
-                  _buildAttachmentOption(
-                    icon: Icons.location_on_rounded,
-                    label: 'Ubicación',
-                    color: Colors.red.shade500,
-                    onTap: () {
-                      Navigator.pop(context);
-                      _sendMessage(
-                        text: '📍 Ubicación: ${widget.report.classroom}, ${widget.report.building}',
-                      );
+                      final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                      if (file != null) _sendMessage(imagePath: file.path);
                     },
                   ),
                 ],
@@ -390,177 +253,18 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       child: Column(
         children: [
           CircleAvatar(
-            radius: 26,
-            backgroundColor: color.withValues(alpha: 0.15),
+            radius: 28,
+            backgroundColor: color.withOpacity(0.15),
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
-  }
-
-  void _resolveReport() async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // 1. Show options to pick from Gallery or Camera
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF261D16) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                'Subir Evidencia de Resolución',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : AppTheme.secondaryColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Es obligatorio adjuntar una foto para marcar este reporte como Terminado.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: theme.hintColor),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.camera),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-                          child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Cámara', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.gallery),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.blue.withValues(alpha: 0.12),
-                          child: const Icon(Icons.photo_library_rounded, color: Colors.blue, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Galería', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (source == null) return;
-
-    // Pick the image
-    final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
-    if (file == null) return;
-
-    // 2. Show upload spinner
-    setState(() {
-      _isResolving = true;
-    });
-
-    try {
-      final bytes = await file.readAsBytes();
-      
-      // Upload to Cloudinary
-      final cloudinaryUrl = await _cloudinaryService.uploadImageBytes(
-        bytes: bytes,
-        fileName: 'res_${widget.report.id}_${file.name}',
-      );
-
-      // 3. Update status in local database & in-memory viewmodel
-      await _viewModel.updateReportStatus(
-        widget.report.id,
-        ReportStatus.resuelto,
-        evidenceUrl: cloudinaryUrl,
-      );
-
-      // Add messages in chat
-      _sendMessage(
-        text: 'Reporte marcado como RESUELTO por ${widget.currentUser.name}. Evidencia de resolución cargada con éxito a Cloudinary.',
-        isSystem: true,
-      );
-
-      _sendMessage(
-        text: 'Evidencia de trabajo terminado:',
-        imageUrl: cloudinaryUrl,
-      );
-
-      _sendMessage(
-        text: 'He terminado de atender el reporte y adjunté la foto de evidencia. Si todo está correcto, daremos por concluido este caso. ¡Saludos!',
-      );
-
-      setState(() {
-        _currentReportStatus = ReportStatus.resuelto;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reporte marcado como Terminado y evidencia guardada.'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al subir evidencia a Cloudinary: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isResolving = false;
-        });
-      }
-    }
   }
 
   @override
@@ -571,18 +275,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     final bubbleBgOutgoing = AppTheme.primaryColor;
     final bubbleBgIncoming = isDark ? const Color(0xFF261D16) : Colors.white;
     final textOutgoingColor = Colors.white;
-    final textIncomingColor = isDark ? Colors.white.withValues(alpha: 0.85) : AppTheme.secondaryColor;
-
-    final String titleText = widget.report.title;
-    final String areaText = widget.report.area == ReportArea.sistema
-        ? 'Sistemas'
-        : widget.report.area == ReportArea.mantenimiento
-            ? 'Mantenimiento'
-            : 'Limpieza';
-
-    // Show "Marcar como Terminado" action button for Staff if report is NOT already resolved
-    final showResolveButton = widget.currentUser.role != UserRole.estudiante &&
-        _currentReportStatus != ReportStatus.resuelto;
+    final textIncomingColor = isDark ? Colors.white.withOpacity(0.85) : AppTheme.secondaryColor;
 
     return Scaffold(
       appBar: AppBar(
@@ -594,38 +287,10 @@ class _ChatRoomViewState extends State<ChatRoomView> {
         titleSpacing: 0,
         title: Row(
           children: [
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-                  child: Icon(
-                    widget.report.area == ReportArea.sistema
-                        ? Icons.laptop_mac_rounded
-                        : widget.report.area == ReportArea.mantenimiento
-                            ? Icons.construction_rounded
-                            : Icons.cleaning_services_rounded,
-                    size: 18,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade600,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF1C140E) : AppTheme.backgroundColor,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
+              child: const Icon(Icons.support_agent_rounded, size: 18, color: AppTheme.primaryColor),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -633,7 +298,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    titleText,
+                    widget.report.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -643,11 +308,10 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                     ),
                   ),
                   Text(
-                    _isTyping ? 'escribiendo...' : 'en línea ($areaText)',
+                    'Soporte Técnico',
                     style: TextStyle(
                       fontSize: 11,
-                      color: _isTyping ? Colors.green.shade600 : Colors.grey,
-                      fontWeight: _isTyping ? FontWeight.bold : FontWeight.normal,
+                      color: Colors.grey.shade500,
                     ),
                   ),
                 ],
@@ -655,34 +319,6 @@ class _ChatRoomViewState extends State<ChatRoomView> {
             ),
           ],
         ),
-        actions: [
-          if (showResolveButton)
-            _isResolving
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor)),
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: TextButton.icon(
-                      onPressed: _resolveReport,
-                      icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-                      label: const Text('Resolver', style: TextStyle(fontSize: 12)),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.green.shade600,
-                        backgroundColor: Colors.green.shade600.withValues(alpha: 0.1),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                    ),
-                  ),
-        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -691,134 +327,43 @@ class _ChatRoomViewState extends State<ChatRoomView> {
         child: SafeArea(
           child: Column(
             children: [
-              // Loading/Uploading cover
-              if (_isResolving)
-                Container(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Subiendo evidencia a Cloudinary y terminando reporte...',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.03)
-                      : Colors.black.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.primaryColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Chat de Soporte Técnico para reporte: ${widget.report.classroom}. Estado: ${_currentReportStatus.name.toUpperCase()}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey : Colors.black54,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Messages Chat Area
+              // Área de Mensajes
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = _messages[index];
-                    return _buildMessageBubble(
-                      msg,
-                      bubbleBgOutgoing,
-                      bubbleBgIncoming,
-                      textOutgoingColor,
-                      textIncomingColor,
-                    );
-                  },
-                ),
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        return _buildMessageBubble(
+                          _messages[index],
+                          bubbleBgOutgoing,
+                          bubbleBgIncoming,
+                          textOutgoingColor,
+                          textIncomingColor,
+                        );
+                      },
+                    ),
               ),
 
-              // Typing Indicator Bouncing dots
+              // Indicador de Carga al enviar
               if (_isTyping)
                 Padding(
                   padding: const EdgeInsets.only(left: 24, bottom: 12, top: 4),
                   child: Row(
                     children: [
-                      const TypingIndicator(),
+                      const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
                       const SizedBox(width: 8),
                       Text(
-                        'Soporte está respondiendo',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade500,
-                          fontStyle: FontStyle.italic,
-                        ),
+                        'Enviando...',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
                       ),
                     ],
                   ),
                 ),
 
-              // Quick replies pill list
-              if (_quickReplies.isNotEmpty && _currentReportStatus != ReportStatus.resuelto)
-                Container(
-                  height: 42,
-                  margin: const EdgeInsets.only(bottom: 6),
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: _quickReplies.length,
-                    itemBuilder: (context, index) {
-                      final text = _quickReplies[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ActionChip(
-                          label: Text(
-                            text,
-                            style: TextStyle(
-                              color: isDark ? Colors.white.withValues(alpha: 0.85) : AppTheme.secondaryColor,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          backgroundColor: isDark ? const Color(0xFF261D16) : Colors.white,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : const Color(0xFFE8E2DA),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          onPressed: () {
-                            _sendMessage(text: text);
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              // Input Send Bar (Bottom)
+              // Barra inferior para escribir
               if (_currentReportStatus != ReportStatus.resuelto)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -826,9 +371,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                     color: isDark ? const Color(0xFF1C140E) : Colors.white,
                     border: Border(
                       top: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : const Color(0xFFEFEBE7),
+                        color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFEFEBE7),
                       ),
                     ),
                   ),
@@ -859,10 +402,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               fillColor: Colors.transparent,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             ),
                           ),
                         ),
@@ -880,7 +420,6 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                   ),
                 )
               else
-                // Nice Resolution banner instead of input bar
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -904,20 +443,14 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     );
   }
 
-  Widget _buildMessageBubble(
-    Message msg,
-    Color bgOutgoing,
-    Color bgIncoming,
-    Color textOutColor,
-    Color textInColor,
-  ) {
+  Widget _buildMessageBubble(Message msg, Color bgOutgoing, Color bgIncoming, Color textOutColor, Color textInColor) {
     if (msg.isSystem) {
       return Center(
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -932,6 +465,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     final align = msg.isOutgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final bubbleColor = msg.isOutgoing ? bgOutgoing : bgIncoming;
     final textColor = msg.isOutgoing ? textOutColor : textInColor;
+    
     final corners = msg.isOutgoing
         ? const BorderRadius.only(
             topLeft: Radius.circular(16),
@@ -945,9 +479,8 @@ class _ChatRoomViewState extends State<ChatRoomView> {
             bottomRight: Radius.circular(16),
             bottomLeft: Radius.circular(2),
           );
-
-    final displayTime =
-        '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}';
+          
+    final displayTime = '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -964,7 +497,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 borderRadius: corners,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withOpacity(0.04),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -974,9 +507,10 @@ class _ChatRoomViewState extends State<ChatRoomView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Mostrar imagen si es que existe
                   if (msg.imageUrl != null) ...[
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
                       child: Image.network(
                         msg.imageUrl!,
                         fit: BoxFit.cover,
@@ -985,55 +519,16 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                           return Container(
                             height: 150,
                             width: 200,
-                            color: Colors.grey.withValues(alpha: 0.2),
-                            child: const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                            color: Colors.grey.withOpacity(0.2),
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                           );
                         },
                       ),
                     ),
                     const SizedBox(height: 8),
                   ],
-                  if (msg.isAudio) ...[
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.play_circle_fill_rounded,
-                          color: msg.isOutgoing ? Colors.white : AppTheme.primaryColor,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 8),
-                        Row(
-                          children: List.generate(8, (i) {
-                            final heights = [10.0, 16.0, 6.0, 20.0, 14.0, 8.0, 18.0, 12.0];
-                            return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                              width: 3,
-                              height: heights[i],
-                              decoration: BoxDecoration(
-                                color: msg.isOutgoing
-                                    ? Colors.white70
-                                    : AppTheme.secondaryColor.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          msg.audioDuration ?? '0:00',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: msg.isOutgoing ? Colors.white70 : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  if (!msg.isAudio)
+                  // Mostrar texto solo si no está vacío
+                  if (msg.text.isNotEmpty)
                     Text(
                       msg.text,
                       style: TextStyle(
@@ -1051,9 +546,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                       Text(
                         displayTime,
                         style: TextStyle(
-                          color: msg.isOutgoing
-                              ? Colors.white.withValues(alpha: 0.6)
-                              : Colors.grey.shade500,
+                          color: msg.isOutgoing ? Colors.white.withOpacity(0.6) : Colors.grey.shade500,
                           fontSize: 9.5,
                         ),
                       ),
@@ -1062,7 +555,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                         Icon(
                           Icons.done_all_rounded,
                           size: 13,
-                          color: Colors.white.withValues(alpha: 0.8),
+                          color: Colors.white.withOpacity(0.8),
                         ),
                       ],
                     ],
@@ -1073,77 +566,6 @@ class _ChatRoomViewState extends State<ChatRoomView> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class TypingIndicator extends StatefulWidget {
-  const TypingIndicator({super.key});
-
-  @override
-  State<TypingIndicator> createState() => _TypingIndicatorState();
-}
-
-class _TypingIndicatorState extends State<TypingIndicator> with TickerProviderStateMixin {
-  late List<AnimationController> _controllers;
-  late List<Animation<double>> _animations;
-
-  @override
-  void initState() {
-    super.initState();
-    _controllers = List.generate(3, (index) {
-      return AnimationController(
-        duration: const Duration(milliseconds: 600),
-        vsync: this,
-      );
-    });
-
-    _animations = _controllers.map((controller) {
-      return Tween<double>(begin: 0.0, end: -6.0).animate(
-        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
-      );
-    }).toList();
-
-    for (int i = 0; i < 3; i++) {
-      Timer(Duration(milliseconds: i * 180), () {
-        if (mounted) {
-          _controllers[i].repeat(reverse: true);
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(3, (index) {
-        return AnimatedBuilder(
-          animation: _animations[index],
-          builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(0, _animations[index].value),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            );
-          },
-        );
-      }),
     );
   }
 }

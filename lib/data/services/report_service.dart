@@ -45,18 +45,22 @@ class ReportService {
     required String jwtToken,
     required String titulo,
     required String descripcion,
-    String? imagePath, // Ruta de la imagen en el dispositivo
+    required int idEdificio,
+    required int idAula,
+    String? imagePath, // Ruta local de la imagen
   }) async {
     var request = http.MultipartRequest('POST', Uri.parse(reportsUrl));
     
     // Cabecera de autenticación
     request.headers['Authorization'] = 'Bearer $jwtToken';
-    
-    // Campos de texto
+
+    // CAMPOS EXACTOS DE LA API
     request.fields['titulo'] = titulo;
     request.fields['descripcion'] = descripcion;
+    request.fields['idEdificio'] = idEdificio.toString();
+    request.fields['idAula'] = idAula.toString();
 
-    // Adjuntar imagen si existe
+    // ADJUNTAR IMAGEN (Con la llave "imagenes")
     if (imagePath != null && imagePath.isNotEmpty) {
       request.files.add(
         await http.MultipartFile.fromPath('imagenes', imagePath),

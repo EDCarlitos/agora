@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
-import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
+import '../../widgets/custom_form_elements.dart';
 import '../view_models/student_dashboard_view_model.dart';
 import 'chat_room_view.dart';
 import 'select_category_view.dart';
-import 'dart:io';
+import 'report_detail_view.dart'; // Importamos la vista de detalle correcta
 
 class StudentDashboardView extends StatefulWidget {
   final User user;
@@ -28,10 +30,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   int _selectedIndex = 0;
   final _viewModel = StudentDashboardViewModel();
 
-
   void _onItemTapped(int index) {
     if (index == 1) {
-      // Tap index 1 triggers report creation form
       _openCreateReportDialog();
     } else {
       setState(() {
@@ -41,13 +41,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   void _openCreateReportDialog() async {
-    // 1. Abrimos la nueva pantalla y esperamos a que el usuario seleccione una categoría
     final ReportArea? selectedArea = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SelectCategoryView()),
     );
 
-    // 2. Si regresó un área (le dio a Continuar), abrimos el formulario
     if (selectedArea != null && mounted) {
       showModalBottomSheet(
         context: context,
@@ -56,15 +54,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         builder: (context) => CreateReportBottomSheet(
           reportedBy: widget.user.name,
           initialArea: selectedArea,
-          onReportCreated: (title, area, subtype, classroom, building, details, imageUrl) async {
+          onReportCreated: (title, details, idEdificio, idAula, imageUrl) async {
             await _viewModel.addReport(
               title: title,
-              area: area,
-              subtype: subtype,
-              classroom: classroom,
-              building: building,
-              dateTime: DateTime.now(),
               details: details,
+              idEdificio: idEdificio,
+              idAula: idAula,
               reportedBy: widget.user.name,
               imagePath: imageUrl,
             );
@@ -140,7 +135,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ReportDetailView(report: report),
+        builder: (context) => ReportDetailView(report: report, currentUser: widget.user),
       ),
     );
   }
@@ -149,28 +144,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    Widget bodyWidget;
-    switch (_selectedIndex) {
-      case 0:
-        bodyWidget = _buildIncidenciasTab();
-        break;
-      case 2:
-        bodyWidget = _buildChatTab();
-        break;
-      case 3:
-        bodyWidget = _buildCuentaTab();
-        break;
-      default:
-        bodyWidget = _buildIncidenciasTab();
-    }
-
     final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Agora',
+          'Ágora',
           style: TextStyle(
             fontFamily: 'Georgia',
             fontWeight: FontWeight.w600,
@@ -213,17 +192,32 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           CircleAvatar(
             radius: 16,
-            backgroundImage: widget.user.photoUrl != null 
-                ? NetworkImage(widget.user.photoUrl!) 
+            backgroundImage: widget.user.photoUrl != null
+                ? NetworkImage(widget.user.photoUrl!)
                 : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
-            // Si no tiene foto de Google, muestra la de por defecto
           ),
           const SizedBox(width: 16),
         ],
       ),
       body: ListenableBuilder(
         listenable: _viewModel,
-        builder: (context, _) => bodyWidget,
+        builder: (context, _) {
+          Widget bodyWidget;
+          switch (_selectedIndex) {
+            case 0:
+              bodyWidget = _buildIncidenciasTab();
+              break;
+            case 2:
+              bodyWidget = _buildChatTab();
+              break;
+            case 3:
+              bodyWidget = _buildCuentaTab();
+              break;
+            default:
+              bodyWidget = _buildIncidenciasTab();
+          }
+          return bodyWidget;
+        },
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -272,11 +266,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   Widget _buildIncidenciasTab() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
     final userIncidents = _viewModel.incidents.toList();
-    final listLimpieza = userIncidents.where((r) => r.area == ReportArea.limpieza).toList();
-    final listSistemas = userIncidents.where((r) => r.area == ReportArea.sistema).toList();
-    final listMantenimiento = userIncidents.where((r) => r.area == ReportArea.mantenimiento).toList();
 
     return SingleChildScrollView(
       child: Column(
@@ -307,7 +297,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       TextButton(
                         onPressed: () {
                           setState(() {
-                            _selectedIndex = 3; // Swapped to account tab index (3 instead of 4)
+                            _selectedIndex = 3;
                           });
                         },
                         child: const Text(
@@ -321,58 +311,35 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 180,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: userIncidents.take(4).length,
-                    itemBuilder: (context, index) {
-                      final item = userIncidents[index];
-                      return _buildRecentCard(item);
-                    },
-                  ),
+                  child: userIncidents.isEmpty
+                      ? const Center(child: Text('No hay reportes', style: TextStyle(color: Colors.white70)))
+                      : ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: userIncidents.take(4).length,
+                          itemBuilder: (context, index) {
+                            final item = userIncidents[index];
+                            return _buildRecentCard(item);
+                          },
+                        ),
                 ),
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionHeader('Limpieza'),
+                _buildSectionHeader('Incidencias de Sistemas'),
                 const SizedBox(height: 8),
-                if (listLimpieza.isEmpty)
+                if (userIncidents.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text('No hay reportes de Limpieza activos.'),
+                    child: Text('No hay reportes activos.'),
                   )
                 else
-                  ...listLimpieza.take(2).map((r) => _buildCategoryCard(r, Icons.cleaning_services_outlined, const Color(0xFFFBBF24))),
-
-                const SizedBox(height: 20),
-
-                _buildSectionHeader('Sistemas'),
-                const SizedBox(height: 8),
-                if (listSistemas.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text('No hay reportes de Sistemas activos.'),
-                  )
-                else
-                  ...listSistemas.take(2).map((r) => _buildCategoryCard(r, Icons.computer_outlined, const Color(0xFF3B82F6))),
-
-                const SizedBox(height: 20),
-
-                _buildSectionHeader('Mantenimiento'),
-                const SizedBox(height: 8),
-                if (listMantenimiento.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text('No hay reportes de Mantenimiento activos.'),
-                  )
-                else
-                  ...listMantenimiento.take(2).map((r) => _buildCategoryCard(r, Icons.build_outlined, const Color(0xFFEF4444))),
+                  ...userIncidents.map((r) => _buildCategoryCard(r, Icons.computer_outlined, const Color(0xFF3B82F6))),
               ],
             ),
           ),
@@ -384,7 +351,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   Widget _buildChatTab() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final myIncidents = _viewModel.incidents.where((r) => r.reportedBy == widget.user.name).toList();
+    
+    final misChatsApi = _viewModel.chats; // Usamos los chats de la API
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -402,20 +370,18 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Custom search bar for messages
           Container(
             height: 46,
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF261D16) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE8E2DA),
+                color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE8E2DA),
               ),
             ),
             child: TextField(
               decoration: InputDecoration(
-                hintText: 'Buscar chats por reporte...',
+                hintText: 'Buscar chats...',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Colors.grey),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -431,19 +397,20 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
           const SizedBox(height: 20),
-
           Text(
-            'Chats por Reporte',
+            'Tus Chats Activos',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.3,
-              color: isDark ? Colors.white70 : AppTheme.secondaryColor.withValues(alpha: 0.7),
+              color: isDark ? Colors.white70 : AppTheme.secondaryColor.withOpacity(0.7),
             ),
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: myIncidents.isEmpty
+            child: _viewModel.isLoadingChats 
+              ? const Center(child: CircularProgressIndicator())
+              : misChatsApi.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
@@ -457,20 +424,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No tienes chats de reportes aún.',
+                            'No tienes chats de soporte aún.',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white60 : AppTheme.secondaryColor.withValues(alpha: 0.8),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Crea un nuevo reporte usando el botón "+" para iniciar un canal de comunicación con soporte.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.white30 : Colors.grey.shade500,
+                              color: isDark ? Colors.white60 : AppTheme.secondaryColor.withOpacity(0.8),
                             ),
                           ),
                         ],
@@ -479,11 +437,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                   )
                 : ListView.builder(
                     physics: const BouncingScrollPhysics(),
-                    itemCount: myIncidents.length,
+                    itemCount: misChatsApi.length,
                     itemBuilder: (context, index) {
-                      final report = myIncidents[index];
-                      final timeStr = '${report.dateTime.hour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')}';
-                      return _buildChatReportChannelItem(report, timeStr);
+                      return _buildChatChannelItem(misChatsApi[index]);
                     },
                   ),
           ),
@@ -492,28 +448,15 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  Widget _buildChatReportChannelItem(Report report, String timeStr) {
+  Widget _buildChatChannelItem(dynamic chat) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final IconData icon = report.area == ReportArea.sistema
-        ? Icons.laptop_mac_rounded
-        : report.area == ReportArea.mantenimiento
-            ? Icons.construction_rounded
-            : Icons.cleaning_services_rounded;
-
-    String statusMsg = '';
-    switch (report.status) {
-      case ReportStatus.pendiente:
-        statusMsg = 'Esperando asignación de personal...';
-        break;
-      case ReportStatus.enProceso:
-        statusMsg = 'Personal operativo asignado y en proceso.';
-        break;
-      case ReportStatus.resuelto:
-        statusMsg = 'Resuelto: El reporte ha sido completado.';
-        break;
-    }
+    // Extraemos la info del JSON de la API
+    final int incidenciaId = chat['id'];
+    final String titulo = chat['titulo'] ?? 'Sin título';
+    final String aula = chat['aula'] ?? 'Sin ubicación';
+    final String adminAsignado = chat['usuarioAdministrativo'] ?? 'Personal asignado';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -521,11 +464,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         color: isDark ? const Color(0xFF261D16) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFEFEBE7),
+          color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFEFEBE7),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withOpacity(0.02),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -536,11 +479,24 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
+            // Pasamos un objeto "mock" de reporte para no romper el ChatRoomView actual.
+            // En el próximo paso, conectaremos ChatRoomView a la API GET /chats/:id
+            final mockReport = Report(
+              id: incidenciaId.toString(),
+              title: titulo,
+              classroom: aula,
+              building: '', 
+              dateTime: DateTime.now(),
+              details: '',
+              status: ReportStatus.enProceso,
+              reportedBy: widget.user.name,
+            );
+
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => ChatRoomView(
-                  report: report,
+                  report: mockReport,
                   currentUser: widget.user,
                 ),
               ),
@@ -552,8 +508,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-                  child: Icon(icon, color: AppTheme.primaryColor, size: 20),
+                  backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
+                  child: const Icon(Icons.support_agent_rounded, color: AppTheme.primaryColor, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -561,7 +517,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        report.title,
+                        titulo,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -572,56 +528,33 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        statusMsg,
+                        'Atendido por: $adminAsignado',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
-                          color: report.status == ReportStatus.pendiente
-                              ? AppTheme.primaryColor.withValues(alpha: 0.8)
-                              : Colors.grey.shade600,
-                          fontWeight: report.status == ReportStatus.pendiente ? FontWeight.w600 : FontWeight.normal,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      timeStr,
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 10,
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade600.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'EN CURSO',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: report.status == ReportStatus.resuelto
-                            ? Colors.green.shade600.withValues(alpha: 0.15)
-                            : report.status == ReportStatus.enProceso
-                                ? Colors.blue.shade600.withValues(alpha: 0.15)
-                                : AppTheme.primaryColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        report.status.name.toUpperCase(),
-                        style: TextStyle(
-                          color: report.status == ReportStatus.resuelto
-                              ? Colors.green.shade600
-                              : report.status == ReportStatus.enProceso
-                                  ? Colors.blue.shade600
-                                  : AppTheme.primaryColor,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -631,15 +564,18 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  Widget _buildCuentaTab() {
+Widget _buildCuentaTab() {
     final theme = Theme.of(context);
-    final myReports = _viewModel.getMyReports(widget.user.name);
+    
+    // Le pasamos tu usuario completo para que aplique la condición
+    final myReports = _viewModel.getMyReports(widget.user);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Tarjeta de Perfil
           Card(
             color: AppTheme.primaryColor.withOpacity(0.05),
             child: Padding(
@@ -648,8 +584,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 children: [
                   CircleAvatar(
                     radius: 28,
-                    backgroundImage: widget.user.photoUrl != null 
-                        ? NetworkImage(widget.user.photoUrl!) 
+                    backgroundImage: widget.user.photoUrl != null
+                        ? NetworkImage(widget.user.photoUrl!)
                         : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
                   ),
                   const SizedBox(width: 16),
@@ -684,8 +620,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               ),
             ),
           ),
+          
           const SizedBox(height: 20),
-
+          
+          // --- RESTAURADO: Sección de Mis Reportes ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -696,7 +634,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ],
           ),
           const SizedBox(height: 8),
-
+          
           if (myReports.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
@@ -748,9 +686,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 );
               },
             ),
+          // --- FIN DE SECCIÓN RESTAURADA ---
 
-          const SizedBox(height: 32),
-
+          const SizedBox(height: 48),
           ElevatedButton.icon(
             onPressed: () async {
               await AuthService().logout();
@@ -901,22 +839,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 }
 
 // ----------------------------------------------------
-// CREATE REPORT BOTTOM SHEET
-// ----------------------------------------------------
-// ----------------------------------------------------
-// CREATE REPORT BOTTOM SHEET
+// CREATE REPORT BOTTOM SHEET (VERSIÓN CORRECTA)
 // ----------------------------------------------------
 class CreateReportBottomSheet extends StatefulWidget {
-  
   final String reportedBy;
-  final ReportArea initialArea; // <-- AQUÍ RECIBE EL ÁREA DE LA PANTALLA ANTERIOR
+  final ReportArea initialArea; 
   final Function(
     String title,
-    ReportArea? area,
-    String subtype, // <-- AHORA PIDE EL SUBTIPO
-    String classroom,
-    String building,
     String details,
+    int idEdificio,
+    int idAula,
     String? imageUrl,
   ) onReportCreated;
 
@@ -934,87 +866,144 @@ class CreateReportBottomSheet extends StatefulWidget {
 class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  final _classroomController = TextEditingController();
-  final _buildingController = TextEditingController();
   final _detailsController = TextEditingController();
-
-  late ReportArea _reportArea;
-  String? _selectedSubtype;
-  String? _selectedImageUrl;
+  
   bool _isSaving = false;
-  bool _isUploading = false;
-
-  final Map<ReportArea, List<String>> _subtypesOptions = {
-    ReportArea.sistema: ['Proyector', 'Cortina de proyector', 'Pantalla', 'Equipo de cómputo', 'Cable HDMI'],
-    ReportArea.limpieza: ['Limpieza de aula', 'Retiro de basura', 'Olor', 'Derrame'],
-    ReportArea.mantenimiento: ['Pizarrón', 'Sillas', 'Escritorios', 'Puerta', 'Iluminación', 'Cerraduras'],
-  };
-
+  String? _selectedImageUrl;
   final _picker = ImagePicker();
-  final _cloudinaryService = CloudinaryService();
+  
+  final _viewModel = StudentDashboardViewModel();
+  int? _selectedEdificioId;
+  int? _selectedAulaId;
 
   @override
   void initState() {
     super.initState();
-    // <-- AQUÍ ES DONDE VA EL INIT STATE, SE ASIGNA EL ÁREA ELEGIDA
-    _reportArea = widget.initialArea; 
+    _viewModel.loadUbicaciones();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _classroomController.dispose();
-    _buildingController.dispose();
     _detailsController.dispose();
     super.dispose();
   }
 
   void _pickAndUploadImage() async {
-    try {
-      final XFile? file = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF261D16) : Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'Seleccionar Origen de Imagen',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppTheme.secondaryColor,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context, ImageSource.camera),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
+                          child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor, size: 24),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Cámara', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context, ImageSource.gallery),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.blue.withOpacity(0.12),
+                          child: const Icon(Icons.photo_library_rounded, color: Colors.blue, size: 24),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Galería', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    try {
+      final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
       if (file == null) return;
 
       setState(() {
-        _selectedImageUrl = file.path; // Guardamos la RUTA LOCAL en la variable
+        _selectedImageUrl = file.path;
       });
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al seleccionar imagen: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error o permiso denegado: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
   void _save() {
-    if (_formKey.currentState!.validate() && _selectedSubtype != null) {
+    if (_formKey.currentState!.validate() && _selectedEdificioId != null && _selectedAulaId != null) {
       setState(() {
         _isSaving = true;
       });
 
       widget.onReportCreated(
         _titleController.text,
-        _reportArea,
-        _selectedSubtype!,
-        _classroomController.text,
-        _buildingController.text,
         _detailsController.text,
+        _selectedEdificioId!,
+        _selectedAulaId!,
         _selectedImageUrl,
       );
-
+      
       Navigator.pop(context);
-    } else if (_selectedSubtype == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, selecciona un Subtipo')),
-        );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor completa todos los campos de ubicación')),
+      );
     }
   }
 
@@ -1039,9 +1028,9 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Nuevo reporte de ${_reportArea.displayName}', // <-- Título dinámico
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
+                  const Text(
+                    'Nuevo reporte de Sistemas', 
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -1051,84 +1040,86 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               ),
               const Divider(),
               const SizedBox(height: 12),
-
-              const Text('Nombre del Reporte / Incidencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextFormField(
+              
+              const CustomLabel(text: 'Título de Reporte'),
+              CustomTextField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                  hintText: 'Ej: Gotera en laboratorio o Proyector sin señal',
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa el nombre' : null,
+                hintText: 'Ej: Proyector sin señal',
+                validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa el título de tu reporte' : null,
               ),
               const SizedBox(height: 16),
+              
+              ListenableBuilder(
+                listenable: _viewModel,
+                builder: (context, _) {
+                  if (_viewModel.isLoadingUbicaciones) {
+                    return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
+                  }
 
-              // --- NUEVO DROPDOWN DE SUBTIPO ---
-              const Text('Subtipo de Incidencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _selectedSubtype,
-                hint: const Text('Selecciona el problema específico'),
-                decoration: const InputDecoration(),
-                items: _subtypesOptions[_reportArea]!.map((String subtype) {
-                  return DropdownMenuItem<String>(
-                    value: subtype,
-                    child: Text(subtype),
+                  final aulasDisponibles = _selectedEdificioId != null 
+                      ? _viewModel.getAulasPorEdificio(_selectedEdificioId!) 
+                      : [];
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const CustomLabel(text: 'Edificio'),
+                            CustomDropdown<int>(
+                              value: _selectedEdificioId,
+                              hintText: 'Ej: Edificio C',
+                              items: _viewModel.edificios.map<DropdownMenuItem<int>>((edif) {
+                                return DropdownMenuItem<int>(
+                                  value: edif['id'],
+                                  child: Text(edif['nombre'], overflow: TextOverflow.ellipsis),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedEdificioId = val;
+                                  _selectedAulaId = null;
+                                });
+                              },
+                              validator: (v) => v == null ? 'Requerido' : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const CustomLabel(text: 'Aula'),
+                            CustomDropdown<int>(
+                              value: _selectedAulaId,
+                              hintText: 'Ej: Aula 102',
+                              items: aulasDisponibles.map<DropdownMenuItem<int>>((aula) {
+                                return DropdownMenuItem<int>(
+                                  value: aula['id'],
+                                  child: Text(aula['nombre'], overflow: TextOverflow.ellipsis),
+                                );
+                              }).toList(),
+                              onChanged: _selectedEdificioId == null ? null : (val) {
+                                setState(() {
+                                  _selectedAulaId = val;
+                                });
+                              },
+                              validator: (v) => v == null ? 'Requerido' : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _selectedSubtype = val;
-                  });
-                },
-                validator: (v) => v == null ? 'Selecciona un subtipo' : null,
+                }
               ),
               const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Edificio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _buildingController,
-                          decoration: const InputDecoration(hintText: 'Ej: Edificio C'),
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Aula', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _classroomController,
-                          decoration: const InputDecoration(hintText: 'Ej: Aula 102'),
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text('Imagen de Referencia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 8),
-              if (_isUploading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else if (_selectedImageUrl != null)
+              
+              const CustomLabel(text: 'Imagen de Referencia'),
+              if (_selectedImageUrl != null)
                 Stack(
                   children: [
                     Container(
@@ -1136,7 +1127,6 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         image: DecorationImage(
-                          // Usamos File de dart:io para leer la ruta local del teléfono
                           image: FileImage(File(_selectedImageUrl!)), 
                           fit: BoxFit.cover,
                         ),
@@ -1160,252 +1150,40 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                     ),
                   ],
                 )
-// ... aquí sigue el OutlinedButton.icon original
               else
                 OutlinedButton.icon(
                   onPressed: _pickAndUploadImage,
                   icon: const Icon(Icons.add_a_photo_outlined),
-                  label: const Text('Subir Imagen a Cloudinary'),
+                  label: const Text('Subir Imagen de Referencia'),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppTheme.primaryColor),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               const SizedBox(height: 16),
-
-              const Text('Detalles del Reporte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextFormField(
+              
+              const CustomLabel(text: 'Detalles del Reporte'),
+              CustomTextField(
                 controller: _detailsController,
+                hintText: 'Explica los detalles sobre el incidente...',
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: 'Explica los detalles sobre el incidente...',
-                ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa los detalles' : null,
               ),
               const SizedBox(height: 24),
-
+              
               ElevatedButton(
                 onPressed: _isSaving ? null : _save,
-                child: const Text('Publicar Registro'),
+                child: _isSaving 
+                    ? const SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      )
+                    : const Text('Publicar Registro'),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-
-// ----------------------------------------------------
-// FULL-SCREEN DETAIL VIEW (CLONE OF INCIDENT DETAIL IMAGE)
-// ----------------------------------------------------
-class ReportDetailView extends StatelessWidget {
-  final Report report;
-
-  const ReportDetailView({super.key, required this.report});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    final bgDark = const Color(0xFF140D09);
-    final bgLight = const Color(0xFFFAF5F0);
-    final canvasBg = isDark ? bgDark : bgLight;
-
-    final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    final ampm = report.dateTime.hour >= 12 ? 'PM' : 'AM';
-    final displayHour = report.dateTime.hour > 12 
-        ? report.dateTime.hour - 12 
-        : (report.dateTime.hour == 0 ? 12 : report.dateTime.hour);
-    final dateStr = '${displayHour.toString().padLeft(2, '0')}:${report.dateTime.minute.toString().padLeft(2, '0')} $ampm, ${report.dateTime.day} ${months[report.dateTime.month - 1]} ${report.dateTime.year}';
-
-    return Scaffold(
-      backgroundColor: canvasBg,
-      appBar: AppBar(
-        backgroundColor: canvasBg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Incident Report',
-          style: TextStyle(
-            fontFamily: 'Georgia',
-            fontWeight: FontWeight.w500,
-            fontSize: 19,
-            color: AppTheme.secondaryColor,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined, size: 20),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              height: 240,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF261D16) : const Color(0xFFEFEBE7),
-                image: report.imageUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(report.imageUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: report.imageUrl == null
-                  ? Center(
-                      child: Icon(
-                        Icons.report_gmailerrorred_rounded,
-                        size: 48,
-                        color: Colors.grey.shade400,
-                      ),
-                    )
-                  : null,
-            ),
-
-            Container(
-              transform: Matrix4.translationValues(0.0, -18.0, 0.0),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1C140E) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    report.title,
-                    style: const TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.secondaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (report.area != null)
-                    _buildMetaIconRow(
-                      Icons.local_offer_outlined,
-                      report.area!.displayName,
-                      const Color(0xFFD97706),
-                    ),
-                  _buildMetaIconRow(
-                    Icons.person_outline_rounded,
-                    report.reportedBy,
-                    isDark ? Colors.white60 : Colors.black54,
-                  ),
-                  _buildMetaIconRow(
-                    Icons.location_on_outlined,
-                    '${report.classroom}, ${report.building}',
-                    isDark ? Colors.white60 : Colors.black54,
-                  ),
-                  _buildMetaIconRow(
-                    Icons.access_time_outlined,
-                    dateStr,
-                    isDark ? Colors.white60 : Colors.black54,
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  const Divider(color: Color(0xFFEFEBE7)),
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    'Item Details',
-                    style: TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.secondaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    report.details,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      height: 1.5,
-                      color: isDark ? Colors.white70 : const Color(0xFF555555),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    'Ubicación',
-                    style: TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.secondaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${report.classroom}, ${report.building}. Piso 3, al final del pasillo a la derecha.',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      height: 1.5,
-                      color: isDark ? Colors.white70 : const Color(0xFF555555),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 36),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('Volver al Dashboard'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMetaIconRow(IconData icon, String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: color,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
