@@ -1,4 +1,7 @@
-import 'dart:async';
+import 'dart:convert';
+import '../../widgets/agora_network_image.dart';
+import 'package:http/http.dart' as http;
+import '../../../../utils/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
@@ -6,8 +9,10 @@ import '../../../../data/models/user.dart';
 import '../../../../data/services/chat_service.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../core/theme.dart';
-import '../view_models/student_dashboard_view_model.dart';
+import '../../students/view_models/student_dashboard_view_model.dart';
+import '../../widgets/image_source_bottom_sheet.dart';
 import '../../widgets/message_bubble.dart';
+import '../../system/view_models/systems_dashboard_view_model.dart';
 
 class Message {
   final String text;
@@ -43,6 +48,8 @@ class _ChatRoomViewState extends State<ChatRoomView> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
+  String _estadoIncidenciaAPI = 'abierta';
+  Map<String, dynamic>? _evidenciaFinal;
   
   List<Message> _messages = [];
   bool _isLoading = true;
@@ -52,13 +59,21 @@ class _ChatRoomViewState extends State<ChatRoomView> {
   final _picker = ImagePicker();
   
   final _chatService = ChatService();
-  final _viewModel = StudentDashboardViewModel(); 
 
   @override
   void initState() {
     super.initState();
     _currentReportStatus = widget.report.status;
     _loadChatData();
+    
+    final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
+    
+    // Validamos el rol para limpiar las notificaciones en el ViewModel correcto
+    if (widget.currentUser.role == UserRole.sistemas) {
+      SystemsDashboardViewModel().markChatNotificationsAsRead(incidenciaIdStr);
+    } else {
+      StudentDashboardViewModel().markChatNotificationsAsRead(incidenciaIdStr);
+    }
   }
 
   @override
@@ -77,12 +92,23 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
       final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
       final incidenciaId = int.parse(incidenciaIdStr);
-      final chatData = await _chatService.getChatDetail(token, incidenciaId);
 
+      // 1. Cargar Mensajes
+      final chatData = await _chatService.getChatDetail(token, incidenciaId);
       final msgsJson = chatData['mensajes'] as List;
+
+      // 2. Cargar Estado y Evidencia haciendo fetch al endpoint existente
+      final url = Uri.parse('${ApiConfig.baseUrl}/incidencias/$incidenciaId');
+      final incidenciaRes = await http.get(url, headers: {'Authorization': 'Bearer $token'});
+      
+      if (incidenciaRes.statusCode == 200) {
+        final data = jsonDecode(incidenciaRes.body)['incidencia'];
+        _estadoIncidenciaAPI = data['estado'] ?? 'abierta';
+        _evidenciaFinal = data['evidencia'];
+      }
       
       setState(() {
-        // Mensaje inicial de sistema para dar contexto visual
+        _messages.clear();
         _messages.add(
           Message(
             text: 'Conectado al chat de soporte para el reporte en ${widget.report.classroom}.',
@@ -91,24 +117,18 @@ class _ChatRoomViewState extends State<ChatRoomView> {
             isSystem: true,
           )
         );
-        
-        // Mapear los mensajes de la API
+
         _messages.addAll(msgsJson.map((m) => _parseApiMessage(m)).toList());
         _isLoading = false;
       });
-      
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       setState(() => _isLoading = false);
-      debugPrint('Error al cargar chat: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar el historial: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al cargar: $e')));
       }
     }
   }
-
   // Mapea el JSON de la BD a nuestra clase Message
   Message _parseApiMessage(Map<String, dynamic> m) {
     final enviadoPor = m['enviadoPor'];
@@ -174,102 +194,15 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     }
   }
 
-  void _showAttachmentMenu() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF261D16) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                'Enviar Adjunto',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : AppTheme.secondaryColor,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildAttachmentOption(
-                    icon: Icons.camera_alt_rounded,
-                    label: 'Cámara',
-                    color: Colors.blue.shade600,
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final file = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-                      if (file != null) _sendMessage(imagePath: file.path);
-                    },
-                  ),
-                  _buildAttachmentOption(
-                    icon: Icons.image_rounded,
-                    label: 'Galería',
-                    color: AppTheme.primaryColor,
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                      if (file != null) _sendMessage(imagePath: file.path);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
+  void _showAttachmentMenu() async {
+    final source = await ImageSourceBottomSheet.show(context);
+    if (source != null) {
+      final file = await _picker.pickImage(source: source, imageQuality: 70);
+      if (file != null) {
+        _sendMessage(imagePath: file.path);
+      }
+    }
   }
-
-  Widget _buildAttachmentOption({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: color.withOpacity(0.15),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -367,7 +300,72 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                 ),
 
               // Barra inferior para escribir
-              if (_currentReportStatus != ReportStatus.resuelto)
+              if (_estadoIncidenciaAPI == 'finalizada' || _estadoIncidenciaAPI == 'cerrada')
+                Container(
+                  width: double.infinity,
+                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                  child: Column(
+                    children: [
+                      // Tarjeta de Evidencia enviada por el técnico
+                      if (_evidenciaFinal != null)
+                        Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            border: Border.all(color: Colors.green.withOpacity(0.3)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Incidencia Resuelta', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _evidenciaFinal!['descripcion'] ?? 'Resuelta sin comentarios adicionales.',
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 13),
+                              ),
+                              if (_evidenciaFinal!['imagenes'] != null && (_evidenciaFinal!['imagenes'] as List).isNotEmpty)
+                                ...[
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 80,
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: (_evidenciaFinal!['imagenes'] as List).length,
+                                      itemBuilder: (context, i) => Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: AgoraNetworkImage(
+                                          imageUrl: _evidenciaFinal!['imagenes'][i],
+                                          height: 80,
+                                          width: 80,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                ]
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24.0, left: 16, right: 16),
+                        child: Text(
+                          'Este reporte ha sido marcado como Terminado por Sistemas y no se permiten más mensajes.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.black45),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -378,64 +376,45 @@ class _ChatRoomViewState extends State<ChatRoomView> {
                       ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.attach_file_rounded, color: AppTheme.primaryColor),
-                        onPressed: _showAttachmentMenu,
-                      ),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF261D16) : const Color(0xFFF5F2EE),
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: TextField(
-                            controller: _textController,
-                            focusNode: _focusNode,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _sendMessage(),
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              color: isDark ? Colors.white : AppTheme.secondaryColor,
+                  child: SafeArea(
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor),
+                          onPressed: _showAttachmentMenu,
+                        ),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF261D16) : const Color(0xFFF5F2EE),
+                              borderRadius: BorderRadius.circular(24),
                             ),
-                            decoration: const InputDecoration(
-                              hintText: 'Escribe un mensaje...',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              fillColor: Colors.transparent,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            child: TextField(
+                              controller: _textController,
+                              focusNode: _focusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Escribe un mensaje...',
+                                hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 14),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                              ),
+                              textInputAction: TextInputAction.send,
+                              onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => _sendMessage(),
-                        child: const CircleAvatar(
+                        const SizedBox(width: 8),
+                        CircleAvatar(
                           radius: 20,
                           backgroundColor: AppTheme.primaryColor,
-                          child: Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                          child: IconButton(
+                            icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                            onPressed: () => _sendMessage(),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
-                  child: Center(
-                    child: Text(
-                      'Este reporte ha sido marcado como Terminado y no se permiten más mensajes.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white54 : Colors.black45,
-                      ),
+                      ],
                     ),
                   ),
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../ui/core/theme.dart';
 import '../../widgets/custom_form_elements.dart';
+import '../../widgets/custom_buttons.dart';
 
 class IncidentResolutionForm extends StatefulWidget {
   final int incidenciaId;
@@ -44,7 +45,10 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
     if (_formKey.currentState!.validate()) {
       if (_selectedImages.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Debes adjuntar al menos 1 fotografía de evidencia.', style: TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Debes adjuntar al menos 1 fotografía de evidencia.', style: TextStyle(color: Colors.white)), 
+            backgroundColor: AppTheme.errorColor
+          ),
         );
         return;
       }
@@ -65,7 +69,7 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 24, 20, MediaQuery.of(context).viewInsets.bottom + 24),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF261D16) : Colors.white,
+        color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Form(
@@ -80,7 +84,10 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Georgia'),
               ),
               const SizedBox(height: 8),
-              const Text('Adjunta de 1 a 3 fotografías probatorias y un comentario técnico para marcar este reporte como resuelto.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text(
+                'Adjunta de 1 a 3 fotografías probatorias y un comentario técnico para marcar este reporte como resuelto.', 
+                style: TextStyle(fontSize: 13, color: Colors.grey)
+              ),
               const SizedBox(height: 20),
               
               const CustomLabel(text: 'Comentario Explicativo'),
@@ -97,10 +104,9 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
                 children: [
                   CustomLabel(text: 'Evidencia Fotográfica (${_selectedImages.length}/3)'),
                   if (_selectedImages.length < 3)
-                    TextButton.icon(
+                    AgoraTextButton(
+                      text: '+ Agregar',
                       onPressed: () => _pickImage(ImageSource.camera),
-                      icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                      label: const Text('Agregar'),
                     )
                 ],
               ),
@@ -130,7 +136,11 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
                             right: 4,
                             child: GestureDetector(
                               onTap: () => setState(() => _selectedImages.removeAt(index)),
-                              child: const CircleAvatar(radius: 12, backgroundColor: Colors.red, child: Icon(Icons.close, size: 14, color: Colors.white)),
+                              child: const CircleAvatar(
+                                radius: 12, 
+                                backgroundColor: AppTheme.errorColor, 
+                                child: Icon(Icons.close, size: 14, color: Colors.white)
+                              ),
                             ),
                           )
                         ],
@@ -140,12 +150,11 @@ class _IncidentResolutionFormState extends State<IncidentResolutionForm> {
                 ),
               const SizedBox(height: 24),
 
-              ElevatedButton(
+              AgoraPrimaryButton(
+                text: 'Confirmar Reparación',
+                isLoading: _isSubmitting,
+                backgroundColor: AppTheme.successColor,
                 onPressed: _isSubmitting ? null : _submit,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
-                child: _isSubmitting 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Confirmar Reparación', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),

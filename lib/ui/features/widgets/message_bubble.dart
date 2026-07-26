@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../normal_user/views/chat_room_view.dart';
+import '../common/views/chat_room_view.dart';
+import '../widgets/agora_network_image.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message msg;
@@ -83,21 +84,11 @@ class MessageBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (msg.imageUrl != null) ...[
-                    ClipRRect(
+                    AgoraNetworkImage(
+                      imageUrl: msg.imageUrl!,
+                      height: 150,
+                      width: 200,
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        msg.imageUrl!,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            height: 150,
-                            width: 200,
-                            color: Colors.grey.withOpacity(0.2),
-                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                          );
-                        },
-                      ),
                     ),
                     const SizedBox(height: 8),
                   ],

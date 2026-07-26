@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
+import '../widgets/custom_buttons.dart';
 
 class RoleDashboardStub extends StatelessWidget {
   final User user;
@@ -20,17 +21,14 @@ class RoleDashboardStub extends StatelessWidget {
         title: const Text('Cerrar Sesión'),
         content: const Text('¿Estás seguro de que deseas salir de tu cuenta?'),
         actions: [
-          TextButton(
+          AgoraTextButton(
+            text: 'Cancelar',
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          AgoraPrimaryButton(
+            text: 'Cerrar Sesión',
+            backgroundColor: theme.colorScheme.error,
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Cerrar Sesión'),
           ),
         ],
       ),
@@ -244,18 +242,11 @@ class RoleDashboardStub extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Secondary Logout Button
-                  OutlinedButton.icon(
+                  AgoraSecondaryButton(
+                    text: 'Cerrar Sesión',
+                    icon: Icons.logout_rounded,
+                    color: theme.colorScheme.error,
                     onPressed: () => _handleLogout(context),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Cerrar Sesión'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: theme.colorScheme.error,
-                      side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                   ),
                 ],
               ),

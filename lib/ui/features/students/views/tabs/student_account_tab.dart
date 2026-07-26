@@ -3,6 +3,8 @@ import '../../../../../data/models/user.dart';
 import '../../../../../data/models/report.dart';
 import '../../../../core/theme.dart';
 import '../../view_models/student_dashboard_view_model.dart';
+import '../../../widgets/user_profile_header_card.dart';
+import '../../../widgets/custom_buttons.dart';
 
 class StudentAccountTab extends StatelessWidget {
   final StudentDashboardViewModel viewModel;
@@ -28,50 +30,7 @@ class StudentAccountTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            color: AppTheme.primaryColor.withValues(alpha: 0.05),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundImage: currentUser.photoUrl != null
-                        ? NetworkImage(currentUser.photoUrl!)
-                        : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          currentUser.name,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          currentUser.email,
-                          style: TextStyle(fontSize: 12, color: theme.hintColor),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            currentUser.role.displayName,
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          UserProfileHeaderCard(user: currentUser),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -135,15 +94,11 @@ class StudentAccountTab extends StatelessWidget {
               },
             ),
           const SizedBox(height: 48),
-          ElevatedButton.icon(
+          AgoraPrimaryButton(
+            text: 'Cerrar Sesión',
+            icon: Icons.logout_rounded,
+            backgroundColor: Colors.red.shade700,
             onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded, size: 18),
-            label: const Text('Cerrar Sesión'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
           ),
           const SizedBox(height: 20),
         ],

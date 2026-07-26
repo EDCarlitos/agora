@@ -5,7 +5,7 @@ import 'data/services/notification_service.dart';
 import 'data/services/auth_service.dart';
 import 'ui/core/theme.dart';
 import 'ui/features/login/views/login_view.dart';
-import 'ui/features/normal_user/views/student_dashboard_view.dart';
+import 'ui/features/students/views/student_dashboard_view.dart';
 import 'ui/features/other_roles/role_stubs.dart';
 import 'ui/features/system/views/systems_dashboard_view.dart';
 

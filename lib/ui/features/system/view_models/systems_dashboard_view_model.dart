@@ -1,18 +1,29 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/report_service.dart';
+import '../../../../data/services/chat_service.dart';
+import '../../../../data/services/notification_service.dart';
 import '../../../../utils/api_config.dart';
+import '../../widgets/shared_chats_tab.dart';
 
-class SystemsDashboardViewModel extends ChangeNotifier {
+class SystemsDashboardViewModel extends ChangeNotifier implements IChatViewModel { 
+
+  static final SystemsDashboardViewModel _instance = SystemsDashboardViewModel._internal();
+  
+  factory SystemsDashboardViewModel() => _instance;
+  
+  SystemsDashboardViewModel._internal();
+
   final ReportService _reportService = ReportService();
   
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // Listas de datos crudos (JSON) parseadas desde la API
+
   List<dynamic> _availableReports = []; 
   List<dynamic> _myInProgressIncidents = []; 
   List<dynamic> _myResolvedIncidents = []; 
@@ -21,6 +32,105 @@ class SystemsDashboardViewModel extends ChangeNotifier {
   List<dynamic> get myInProgressIncidents => _myInProgressIncidents;
   List<dynamic> get myResolvedIncidents => _myResolvedIncidents;
 
+final ChatService _chatService = ChatService();
+  final NotificationService _notificationService = NotificationService();
+  
+  List<dynamic> _chats = [];
+  List<dynamic> get chats => _chats;
+  final List<Map<String, dynamic>> notifications = [];
+  
+  Timer? _pollingTimer;
+
+  void startPolling() {
+    if (_pollingTimer != null) return;
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      loadNotifications();
+    });
+  }
+
+  void stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  Future<void> loadChats() async {
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        _chats = await _chatService.getChats(token);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error al cargar chats de sistemas: $e');
+    }
+  }
+
+  Future<void> loadNotifications() async {
+    try {
+      final token = AuthService().token;
+      if (token != null) {
+        final apiNotifications = await _notificationService.getNotifications(token);
+        notifications.clear();
+        for (var n in apiNotifications) {
+          notifications.add({
+            'id': n['id'].toString(),
+            'title': n['titulo'] ?? 'Notificación',
+            'body': n['cuerpo'] ?? '',
+            'isRead': n['leida'] ?? false,
+            'datos': n['datos'], 
+          });
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error cargando notificaciones: $e');
+    }
+  }
+
+  int get totalUnreadChatMessages {
+    return notifications.where((n) {
+      if (n['isRead'] == true) return false;
+      var datos = n['datos'];
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+      return datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE';
+    }).length;
+  }
+
+  int getUnreadCountForChat(String incidenciaId) {
+    return notifications.where((n) {
+      if (n['isRead'] == true) return false;
+      var datos = n['datos'];
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+      return datos != null &&
+          datos is Map &&
+          datos['tipo'] == 'NUEVO_MENSAJE' &&
+          datos['incidenciaId']?.toString() == incidenciaId.toString();
+    }).length;
+  }
+
+  Future<void> markChatNotificationsAsRead(String incidenciaId) async {
+    final token = AuthService().token;
+    if (token == null) return;
+    bool hasChanges = false;
+
+    for (var n in notifications) {
+      if (n['isRead'] == true) continue;
+      var datos = n['datos'];
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+      if (datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE' && datos['incidenciaId']?.toString() == incidenciaId.toString()) {
+        n['isRead'] = true; 
+        hasChanges = true;
+        await _notificationService.markAsRead(token, n['id']);
+      }
+    }
+    if (hasChanges) notifyListeners();
+  }
   Future<void> loadDashboardData(User currentUser) async {
     _isLoading = true;
     notifyListeners();

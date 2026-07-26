@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../core/theme.dart';
 import '../view_models/login_view_model.dart';
+import '../../widgets/custom_buttons.dart';
 
 
 class LoginView extends StatefulWidget {
@@ -259,8 +260,9 @@ class _LoginViewState extends State<LoginView> {
                             // Forgot Password Link
                             Align(
                               alignment: Alignment.centerRight,
-                              child: GestureDetector(
-                                onTap: () {
+                              child: AgoraTextButton(
+                                text: '¿Olvidaste tu contraseña?',
+                                onPressed: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text('Funcionalidad no implementada en este prototipo.'),
@@ -268,42 +270,15 @@ class _LoginViewState extends State<LoginView> {
                                     ),
                                   );
                                 },
-                                child: Text(
-                                  '¿Olvidaste tu contraseña?',
-                                  style: TextStyle(
-                                    color: AppTheme.primaryColor,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
                               ),
                             ),
 
                             const SizedBox(height: 16), // Espacio final
                             // Login Button
-                            ElevatedButton(
-                              onPressed: _viewModel.isLoading ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryColor,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: _viewModel.isLoading
-                                  ? const SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: const [
-                                        Text('Iniciar Sesión'),
-                                        SizedBox(width: 8),
-                                        Text('→', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
+                            AgoraPrimaryButton(
+                              text: 'Iniciar Sesión',
+                              onPressed: _submit,
+                              isLoading: _viewModel.isLoading,
                             ),
                             const SizedBox(height: 32),
 
@@ -321,24 +296,14 @@ class _LoginViewState extends State<LoginView> {
                             ),
                             const SizedBox(height: 24),
 
-                            OutlinedButton.icon(
+                            AgoraSecondaryButton(
+                              text: 'Ingresar con Google',
                               onPressed: _viewModel.isLoading ? null : () async {
-                                // Aquí llamamos a la función REAL de Google
                                 final user = await _viewModel.loginWithGoogle();
                                 if (user != null && mounted) {
                                   widget.onLoginSuccess(user);
                                 }
                               },
-                              
-                              label: const Text('Ingresar con Google'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: textColor,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: BorderSide(color: mutedColor),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
                             ),
                             
                             const SizedBox(height: 32),
@@ -348,12 +313,9 @@ class _LoginViewState extends State<LoginView> {
                               alignment: WrapAlignment.center,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Text(
-                                  '¿Problemas de acceso? Contacta a ',
-                                  style: TextStyle(fontSize: 12, color: mutedColor),
-                                ),
-                                GestureDetector(
-                                  onTap: () {
+                                AgoraTextButton(
+                                  text: 'Soporte TI.',
+                                  onPressed: () {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text('Soporte TI: soporte@upqroo.edu.mx'),
@@ -361,15 +323,6 @@ class _LoginViewState extends State<LoginView> {
                                       ),
                                     );
                                   },
-                                  child: Text(
-                                    'Soporte TI.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.primaryColor,
-                                      fontWeight: FontWeight.bold,
-                                      decoration: TextDecoration.underline,
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),

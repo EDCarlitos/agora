@@ -7,13 +7,15 @@ import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../core/theme.dart';
 import '../../widgets/custom_form_elements.dart';
+import '../../widgets/image_source_bottom_sheet.dart';
+import '../../widgets/custom_buttons.dart';
 import '../view_models/student_dashboard_view_model.dart';
 import 'report_detail_view.dart';
 import 'select_category_view.dart';
 
-// Importamos las nuevas pestañas
+
 import 'tabs/student_incidents_tab.dart';
-import 'tabs/student_chats_tab.dart';
+import '../../widgets/shared_chats_tab.dart';
 import 'tabs/student_account_tab.dart';
 
 class StudentDashboardView extends StatefulWidget {
@@ -36,11 +38,17 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
   @override
   void initState() {
-    super.initState();  
+    super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _viewModel.loadReports();
       _viewModel.loadChats();
+      _viewModel.startPolling(); 
     });
+  }
+  @override
+  void dispose() {
+    _viewModel.stopPolling(); 
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
@@ -128,12 +136,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       ),
               ),
               actions: [
-                TextButton(
+                AgoraTextButton(
+                  text: 'Marcar como leídas',
                   onPressed: () {
                     _viewModel.markNotificationsAsRead();
                     Navigator.pop(context);
                   },
-                  child: const Text('Marcar como leídas'),
                 ),
               ],
             );
@@ -158,143 +166,182 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Ágora',
-          style: TextStyle(
-            fontFamily: 'Georgia',
-            fontWeight: FontWeight.w600,
-            fontSize: 22,
-          ),
-        ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none_rounded),
-                onPressed: _showNotificationsDialog,
+    // Envolvemos todo el Scaffold en el ListenableBuilder para que la 
+    // AppBar y el BottomNavigationBar reaccionen en tiempo real.
+    return ListenableBuilder(
+      listenable: _viewModel,
+      builder: (context, _) {
+        final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text(
+              'Ágora',
+              style: TextStyle(
+                fontFamily: 'Georgia',
+                fontWeight: FontWeight.w600,
+                fontSize: 22,
               ),
-              if (unreadCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      '$unreadCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+            ),
+            actions: [
+              Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    onPressed: _showNotificationsDialog,
                   ),
-                ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: widget.user.photoUrl != null
+                    ? NetworkImage(widget.user.photoUrl!)
+                    : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
+              ),
+              const SizedBox(width: 16),
             ],
           ),
-          CircleAvatar(
-            radius: 16,
-            backgroundImage: widget.user.photoUrl != null
-                ? NetworkImage(widget.user.photoUrl!)
-                : const NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: ListenableBuilder(
-        listenable: _viewModel,
-        builder: (context, _) {
-          switch (_selectedIndex) {
-            case 0:
-              return StudentIncidentsTab(
-                viewModel: _viewModel,
-                onShowDetail: _showReportDetail,
-                onSeeAllChats: () => setState(() => _selectedIndex = 3),
-              );
-            case 2:
-              return StudentChatsTab(
-                viewModel: _viewModel,
-                currentUser: widget.user,
-              );
-            case 3:
-              return StudentAccountTab(
-                viewModel: _viewModel,
-                currentUser: widget.user,
-                onLogout: _handleLogout,
-                onShowDetail: _showReportDetail,
-              );
-            default:
-              return StudentIncidentsTab(
-                viewModel: _viewModel,
-                onShowDetail: _showReportDetail,
-                onSeeAllChats: () => setState(() => _selectedIndex = 3),
-              );
-          }
-        },
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEFEBE7),
-              width: 1,
+          
+          // Consumimos el componente extraído para mantener el build limpio
+          body: _buildCurrentTab(),
+          
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEFEBE7),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: isDark ? const Color(0xFF1C140E) : AppTheme.backgroundColor,
+              selectedItemColor: AppTheme.primaryColor,
+              unselectedItemColor: isDark ? Colors.white38 : const Color(0xFF8F7A6E),
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+              unselectedLabelStyle: const TextStyle(fontSize: 10),
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.report_gmailerrorred_outlined),
+                  activeIcon: Icon(Icons.report_gmailerrorred_rounded),
+                  label: 'Incidencias',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.add_circle, size: 36, color: AppTheme.primaryColor),
+                  label: 'Agregar',
+                ),
+                BottomNavigationBarItem(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline_rounded),
+                      if (_viewModel.totalUnreadChatMessages > 0)
+                        Positioned(
+                          right: -6,
+                          top: -6,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Text(
+                              '${_viewModel.totalUnreadChatMessages}',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  activeIcon: const Icon(Icons.chat_bubble_rounded),
+                  label: 'Chat',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline_rounded),
+                  activeIcon: Icon(Icons.person_rounded),
+                  label: 'Cuenta',
+                ),
+              ],
             ),
           ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: isDark ? const Color(0xFF1C140E) : AppTheme.backgroundColor,
-          selectedItemColor: AppTheme.primaryColor,
-          unselectedItemColor: isDark ? Colors.white38 : const Color(0xFF8F7A6E),
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-          unselectedLabelStyle: const TextStyle(fontSize: 10),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.report_gmailerrorred_outlined),
-              activeIcon: Icon(Icons.report_gmailerrorred_rounded),
-              label: 'Incidencias',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle, size: 36, color: AppTheme.primaryColor),
-              label: 'Agregar',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline_rounded),
-              activeIcon: Icon(Icons.chat_bubble_rounded),
-              label: 'Chat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: 'Cuenta',
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
-}
+
+  // --- COMPONENTE EXTRAÍDO ---
+  // Maneja la lógica de qué pestaña mostrar basado en el índice
+  Widget _buildCurrentTab() {
+    switch (_selectedIndex) {
+      case 0:
+        return StudentIncidentsTab(
+          viewModel: _viewModel,
+          onShowDetail: _showReportDetail,
+          // Corrección: El índice de la pestaña de Chats es 2, no 3.
+          onSeeAllChats: () => setState(() => _selectedIndex = 2), 
+        );
+      case 2:
+        return SharedChatsTab( // <-- Usamos el unificado
+          viewModel: _viewModel,
+          currentUser: widget.user,
+          title: 'Tus Chats Activos',
+        );
+      case 3:
+        return StudentAccountTab(
+          viewModel: _viewModel,
+          currentUser: widget.user,
+          onLogout: _handleLogout,
+          onShowDetail: _showReportDetail,
+        );
+      default:
+        return StudentIncidentsTab(
+          viewModel: _viewModel,
+          onShowDetail: _showReportDetail,
+          onSeeAllChats: () => setState(() => _selectedIndex = 2),
+        );
+    }
+  }
+ }
 
 // ----------------------------------------------------
 // CREATE REPORT BOTTOM SHEET
 // ----------------------------------------------------
+
 class CreateReportBottomSheet extends StatefulWidget {
   final String reportedBy;
   final ReportArea initialArea; 
@@ -344,83 +391,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   }
 
   void _pickAndUploadImage() async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF261D16) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                'Seleccionar Origen de Imagen',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : AppTheme.secondaryColor,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.camera),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
-                          child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Cámara', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.gallery),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.blue.withOpacity(0.12),
-                          child: const Icon(Icons.photo_library_rounded, color: Colors.blue, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Galería', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-
+    final source = await ImageSourceBottomSheet.show(context);
     if (source == null) return;
 
     try {
@@ -605,14 +576,10 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                   ],
                 )
               else
-                OutlinedButton.icon(
+                AgoraSecondaryButton(
+                  text: 'Subir Imagen de Referencia',
+                  icon: Icons.add_a_photo_outlined,
                   onPressed: _pickAndUploadImage,
-                  icon: const Icon(Icons.add_a_photo_outlined),
-                  label: const Text('Subir Imagen de Referencia'),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.primaryColor),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               const SizedBox(height: 16),
               
@@ -625,15 +592,10 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               ),
               const SizedBox(height: 24),
               
-              ElevatedButton(
+              AgoraPrimaryButton(
+                text: 'Publicar Registro',
+                isLoading: _isSaving,
                 onPressed: _isSaving ? null : _save,
-                child: _isSaving 
-                    ? const SizedBox(
-                        height: 20, 
-                        width: 20, 
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                      )
-                    : const Text('Publicar Registro'),
               ),
             ],
           ),

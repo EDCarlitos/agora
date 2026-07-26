@@ -35,16 +35,16 @@ enum ReportArea {
 class Report {
   final String id;
   final String? incidenciaId;
-  final String title; // Nombre del reporte
-  final ReportArea? area; // Area (sistema, limpieza, mantenimiento)
-  final String classroom; // Aula
-  final String building; // Edificio
-  final DateTime dateTime; // Hora y fecha
-  final String details; // Detalles del reporte
+  final String title;
+  final ReportArea? area;
+  final String classroom;
+  final String building;
+  final DateTime dateTime;
+  final String details;
   final ReportStatus status;
   final String reportedBy;
-  final String? imageUrl; // Reference image URL
-  final String? evidenceUrl; // Resolution evidence image URL
+  final String? imageUrl;
+  final String? evidenceUrl;
 
   const Report({
     required this.id,
@@ -60,6 +60,68 @@ class Report {
     this.imageUrl,
     this.evidenceUrl,
   });
+
+  /// Factory para construir un Reporte desde el JSON del Backend (Centraliza el parseo)
+  factory Report.fromJson(Map<String, dynamic> json, {String? overrideId}) {
+    final aula = json['aula'] ?? {};
+    final edificio = aula['edificio'] ?? {};
+    final reportante = json['reportante'] ?? {};
+    final imagenes = json['imagenes'] as List? ?? [];
+
+    ReportStatus parsedStatus = ReportStatus.pendiente;
+    if (json['estado'] == 'ACEPTADO') parsedStatus = ReportStatus.enProceso;
+    if (json['estado'] == 'FINALIZADO' || json['estado'] == 'RECHAZADO') parsedStatus = ReportStatus.resuelto;
+
+    String? incId;
+    String? evidenciaUrl;
+
+    if (json['incidencia'] != null) {
+      incId = json['incidencia']['id'].toString();
+      
+      // --- NUEVO: Leer el estado de la incidencia ---
+      final incEstado = json['incidencia']['estado'];
+      if (incEstado == 'finalizada' || incEstado == 'cerrada') {
+        parsedStatus = ReportStatus.resuelto;
+      }
+
+      // OPCIONAL: Extraer la imagen de evidencia si existe para mostrarla en el detalle
+      if (json['incidencia']['evidencia'] != null) {
+        final imgsEvidencia = json['incidencia']['evidencia']['imagenes'] as List? ?? [];
+        if (imgsEvidencia.isNotEmpty) {
+          evidenciaUrl = imgsEvidencia[0] is String 
+              ? imgsEvidencia[0] 
+              : imgsEvidencia[0]['url'];
+        }
+      }
+    }
+
+    return Report(
+      id: overrideId ?? json['id'].toString(),
+      incidenciaId: incId,
+      title: json['titulo'] ?? 'Sin título',
+      classroom: aula['nombre'] ?? 'Sin aula',
+      building: edificio['nombre'] ?? 'Sin edificio',
+      dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']).toLocal() : DateTime.now(),
+      details: json['descripcion'] ?? 'Sin detalles',
+      status: parsedStatus, // <-- Usamos el status corregido
+      reportedBy: reportante['username'] ?? reportante['email'] ?? 'Usuario',
+      imageUrl: imagenes.isNotEmpty ? imagenes[0]['url'] : null,
+      evidenceUrl: evidenciaUrl, 
+    );
+  }
+
+  /// Propiedad calculada para delegar la lógica de fechas fuera de la UI
+  String get timeAgo {
+    final now = DateTime.now();
+    final localDate = dateTime.toLocal();
+    final difference = now.difference(localDate);
+
+    if (difference.inMinutes < 1) return 'Hace un momento';
+    if (difference.inMinutes < 60) return 'Hace ${difference.inMinutes} min';
+    if (difference.inHours < 24) return 'Hace ${difference.inHours} h';
+    if (difference.inDays == 1) return 'Hace 1 día';
+    return 'Hace ${difference.inDays} días';
+  }
 
   Report copyWith({
     String? id,

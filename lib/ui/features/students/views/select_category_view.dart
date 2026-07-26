@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/report.dart';
 import '../../../core/theme.dart';
+import '../../widgets/custom_buttons.dart';
 
 class SelectCategoryView extends StatefulWidget {
   const SelectCategoryView({super.key});
@@ -74,29 +75,17 @@ class _SelectCategoryViewState extends State<SelectCategoryView> {
               
 
               const Spacer(),
-
-              // Botón Continuar
-              ElevatedButton(
+              AgoraPrimaryButton(
+                text: 'Continuar',
                 onPressed: _selectedArea == null
                     ? null
                     : () {
                         // Regresamos el área seleccionada a la pantalla anterior
                         Navigator.pop(context, _selectedArea);
                       },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.3),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Continuar',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
               ),
+              // Botón Continuar
+              
               const SizedBox(height: 16),
             ],
           ),

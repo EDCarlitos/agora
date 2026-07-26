@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../system/view_models/systems_dashboard_view_model.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/cloudinary_service.dart';
 import '../../../core/theme.dart';
 import '../view_models/student_dashboard_view_model.dart';
-import 'chat_room_view.dart';
+import '../../common/views/chat_room_view.dart';
+import '../../widgets/image_source_bottom_sheet.dart';
+import '../../widgets/custom_buttons.dart';
+import '../../widgets/agora_network_image.dart';
 
 class ReportDetailView extends StatefulWidget {
   final Report report;
@@ -35,89 +39,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
   }
 
   void _resolveReport() async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF261D16) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                'Subir Evidencia de Resolución',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : AppTheme.secondaryColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Es obligatorio adjuntar una foto para marcar este reporte como Terminado.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: theme.hintColor),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.camera),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-                          child: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Cámara', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, ImageSource.gallery),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.blue.withValues(alpha: 0.12),
-                          child: const Icon(Icons.photo_library_rounded, color: Colors.blue, size: 24),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Galería', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-
+    final source = await ImageSourceBottomSheet.show(context);
     if (source == null) return;
 
     final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
@@ -174,16 +96,14 @@ class _ReportDetailViewState extends State<ReportDetailView> {
       }
     }
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    final bgDark = const Color(0xFF140D09);
-    final bgLight = const Color(0xFFFAF5F0);
-    final canvasBg = isDark ? bgDark : bgLight;
-
+    // Consumimos los colores directamente del Theme
+    final canvasBg = theme.scaffoldBackgroundColor;
+    
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -198,13 +118,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
 
     final isStaff = widget.currentUser.role != UserRole.estudiante;
     final isResolved = _currentReport.status == ReportStatus.resuelto;
-
-    // --- NUEVA LÓGICA DE PERMISOS ---
-    // Verificamos si el usuario actual es el creador del reporte
-    final isMyReport = _currentReport.reportedBy == widget.currentUser.name ||
-                       _currentReport.reportedBy == widget.currentUser.email;
-    
-    // Solo mostramos los botones de acción si es personal técnico o si es su propio reporte
+    final isMyReport = _currentReport.reportedBy == widget.currentUser.name || _currentReport.reportedBy == widget.currentUser.email;
     final showActionPanel = isStaff || isMyReport;
 
     return Scaffold(
@@ -234,32 +148,27 @@ class _ReportDetailViewState extends State<ReportDetailView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Original report image card
-                Container(
+                SizedBox(
                   height: 240,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF261D16) : const Color(0xFFEFEBE7),
-                    image: _currentReport.imageUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(_currentReport.imageUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
+                  width: double.infinity,
                   child: _currentReport.imageUrl == null
-                      ? Center(
-                          child: Icon(
-                            Icons.image_not_supported_rounded,
-                            size: 48,
-                            color: Colors.grey.shade400,
+                      ? Container(
+                          color: isDark ? AppTheme.darkSurface : AppTheme.offWhite,
+                          child: Center(
+                            child: Icon(Icons.image_not_supported_rounded, size: 48, color: Colors.grey.shade400),
                           ),
                         )
-                      : null,
+                      : AgoraNetworkImage(
+                          imageUrl: _currentReport.imageUrl!,
+                          height: 240,
+                          width: double.infinity,
+                          borderRadius: BorderRadius.zero, 
+                        ),
                 ),
                 Container(
                   transform: Matrix4.translationValues(0.0, -18.0, 0.0),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                    color: isDark ? AppTheme.offBlack : Colors.white,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
@@ -281,14 +190,13 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // Status Badge
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: isResolved
-                                  ? Colors.green.shade600.withOpacity(0.15)
+                                  ? AppTheme.successColor.withOpacity(0.15)
                                   : _currentReport.status == ReportStatus.enProceso
-                                      ? Colors.blue.shade600.withOpacity(0.15)
+                                      ? AppTheme.infoColor.withOpacity(0.15)
                                       : AppTheme.primaryColor.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
@@ -296,9 +204,9 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                               _currentReport.status.displayName,
                               style: TextStyle(
                                 color: isResolved
-                                    ? Colors.green.shade600
+                                    ? AppTheme.successColor
                                     : _currentReport.status == ReportStatus.enProceso
-                                        ? Colors.blue.shade600
+                                        ? AppTheme.infoColor
                                         : AppTheme.primaryColor,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -312,7 +220,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                         _buildMetaIconRow(
                           Icons.local_offer_outlined,
                           'Área: ${_currentReport.area!.displayName}',
-                          const Color(0xFFD97706),
+                          AppTheme.warningColor,
                         ),
                       _buildMetaIconRow(
                         Icons.person_outline_rounded,
@@ -331,7 +239,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                       ),
                       
                       const SizedBox(height: 16),
-                      const Divider(color: Color(0xFFEFEBE7)),
+                      Divider(color: isDark ? Colors.white10 : Colors.black12),
                       const SizedBox(height: 16),
                       
                       const Text(
@@ -352,11 +260,9 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                           color: isDark ? Colors.white70 : const Color(0xFF555555),
                         ),
                       ),
-
-                      // Resolution Evidence
                       if (isResolved && _currentReport.evidenceUrl != null) ...[
                         const SizedBox(height: 24),
-                        const Divider(color: Color(0xFFEFEBE7)),
+                        Divider(color: isDark ? Colors.white10 : Colors.black12),
                         const SizedBox(height: 16),
                         const Text(
                           'Evidencia de Resolución (Cerrado)',
@@ -364,25 +270,15 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                             fontFamily: 'Georgia',
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green,
+                            color: AppTheme.successColor,
                           ),
                         ),
                         const SizedBox(height: 12),
-                        ClipRRect(
+                        AgoraNetworkImage(
+                          imageUrl: _currentReport.evidenceUrl!,
+                          height: 200,
+                          width: double.infinity,
                           borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            height: 200,
-                            width: double.infinity,
-                            color: isDark ? const Color(0xFF261D16) : const Color(0xFFF5F2EE),
-                            child: Image.network(
-                              _currentReport.evidenceUrl!,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                              },
-                            ),
-                          ),
                         ),
                       ],
                     ],
@@ -391,8 +287,6 @@ class _ReportDetailViewState extends State<ReportDetailView> {
               ],
             ),
           ),
-          
-          // --- PANEL DE BOTONES CONDICIONADO ---
           if (showActionPanel)
             Positioned(
               left: 0,
@@ -401,7 +295,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C140E) : Colors.white,
+                  color: isDark ? AppTheme.offBlack : Colors.white,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.08),
@@ -411,37 +305,53 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                   ],
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start, // <-- ESTA LÍNEA ARREGLA EL DESCUADRE
                   children: [
-                    // Resolve button for staff when pending/in-progress
-                    if (isStaff && !isResolved) ...[
+                    // --- NUEVA LÓGICA DE BOTONES PARA STAFF ---
+                    if (isStaff && _currentReport.status == ReportStatus.pendiente) ...[
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: AgoraPrimaryButton(
+                          text: 'Asignarme',
+                          icon: Icons.assignment_ind_rounded,
+                          onPressed: () async {
+                            final success = await SystemsDashboardViewModel().assignReportToMe(
+                              int.parse(_currentReport.id), 
+                              widget.currentUser
+                            );
+                            if (success && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Incidencia asignada a ti.'), backgroundColor: AppTheme.successColor),
+                              );
+                              Navigator.pop(context, true); 
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ] else if (isStaff && _currentReport.status == ReportStatus.enProceso) ...[
+                      Expanded(
+                        child: AgoraSecondaryButton(
+                          text: 'Resolver',
+                          icon: Icons.check_circle_outline_rounded,
+                          color: AppTheme.successColor,
                           onPressed: _isResolving ? null : _resolveReport,
-                          icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                          label: const Text('Resolver'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.green.shade600,
-                            side: BorderSide(color: Colors.green.shade600),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
                     ],
-                    // Main Chat Room button
+
+                    // --- BOTÓN DE CHAT ---
                     Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min, // Para no empujar el layout
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(
-                            width: double.infinity, // Para que el botón ocupe todo el ancho
-                            child: ElevatedButton.icon(
-                              // --- CONDICIÓN PARA 
+                            width: double.infinity,
+                            child: AgoraPrimaryButton(
+                              text: isResolved ? 'Ver Chat' : 'Abrir Chat',
+                              icon: Icons.forum_outlined,
                               onPressed: _currentReport.status == ReportStatus.pendiente
-                                  ? null // null deshabilita el botón visual y funcionalmente
+                                  ? null 
                                   : () {
                                       Navigator.push(
                                         context,
@@ -453,58 +363,25 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                                         ),
                                       );
                                     },
-                              icon: const Icon(Icons.forum_outlined, size: 18),
-                              label: Text(isResolved ? 'Ver Chat' : 'Abrir Chat de Soporte'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryColor,
-                                foregroundColor: Colors.white,
-                                // Color para cuando está deshabilitado
-                                disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.3),
-                                disabledForegroundColor: Colors.white.withOpacity(0.7),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
                             ),
                           ),
                           if (_currentReport.status == ReportStatus.pendiente)
                             Padding(
                               padding: const EdgeInsets.only(top: 4.0),
                               child: Text(
-                                'En espera de que el personal técnico responda.',
+                                isStaff ? 'Asígnate la incidencia para chatear.' : 'En espera de un técnico.',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   color: isDark ? Colors.white54 : Colors.black54,
                                   fontStyle: FontStyle.italic,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                         ],
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-
-          // Resolution progress overlay
-          if (_isResolving)
-            Container(
-              color: Colors.black.withOpacity(0.5),
-              child: const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Subiendo evidencia a Cloudinary...', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
                 ),
               ),
             ),

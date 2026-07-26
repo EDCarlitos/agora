@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/models/report.dart';
@@ -6,8 +8,9 @@ import '../../../../data/services/auth_service.dart'; // Importante para obtener
 import '../../../../data/services/notification_service.dart';
 import '../../../../data/services/aula_service.dart';
 import '../../../../data/services/chat_service.dart';
+import '../../widgets/shared_chats_tab.dart';
 
-class StudentDashboardViewModel extends ChangeNotifier {
+class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel { // <-- 2. Agrega "implements IChatViewModel"
   static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
   factory StudentDashboardViewModel() => _instance;
   
@@ -30,6 +33,13 @@ class StudentDashboardViewModel extends ChangeNotifier {
   
   List<Report> get allReports => _reports;
   List<Report> get incidents => _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  List<Report> get recentIncidents {
+    final now = DateTime.now();
+    return incidents.where((r) {
+      final localDate = r.dateTime.toLocal();
+      return now.difference(localDate).inHours <= 24;
+    }).take(5).toList();
+  }
 
   List<Report> getMyReports(User user) {
     // Filtramos estrictamente bajo la condición de que el reportante
@@ -42,6 +52,40 @@ class StudentDashboardViewModel extends ChangeNotifier {
     return filtered;
   }
 
+
+Future<void> markChatNotificationsAsRead(String incidenciaId) async {
+    final token = AuthService().token;
+    if (token == null) return;
+
+    bool hasChanges = false;
+
+    // 1. Buscamos y actualizamos localmente (para que la UI reaccione instantáneamente)
+    for (var n in notifications) {
+      if (n['isRead'] == true) continue;
+      
+      var datos = n['datos'];
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+
+      if (datos != null && 
+          datos is Map && 
+          datos['tipo'] == 'NUEVO_MENSAJE' && 
+          datos['incidenciaId']?.toString() == incidenciaId.toString()) {
+        
+        n['isRead'] = true; 
+        hasChanges = true;
+        
+        // 2. Le avisamos a la API que esta notificación específica ya fue leída
+        await _notificationService.markAsRead(token, n['id']);
+      }
+    }
+
+    // 3. Si hubo cambios, repintamos la UI (desaparece el badge verde/rojo)
+    if (hasChanges) {
+      notifyListeners();
+    }
+  }
   // --- CARGAR NOTIFICACIONES DESDE LA API ---
   Future<void> loadNotifications() async {
     try {
@@ -58,6 +102,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
                 ? DateTime.parse(n['fechaCreacion']).toLocal().toString().substring(0, 16)
                 : 'Ahora',
             'isRead': n['leida'] ?? false,
+            'datos': n['datos'], // <-- ¡NUEVO! Capturamos los datos extra de tu API
           });
         }
         notifyListeners();
@@ -67,6 +112,57 @@ class StudentDashboardViewModel extends ChangeNotifier {
     }
   }
 
+  // ==========================================
+  // --- NUEVA LÓGICA DE POLLING Y CONTADORES
+  // ==========================================
+  Timer? _pollingTimer;
+
+  void startPolling() {
+    // Evita crear múltiples timers
+    if (_pollingTimer != null) return; 
+    
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      loadNotifications();
+      // Opcional: loadChats() si también quieres que la lista de chats se refresque sola
+    });
+  }
+
+  void stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  // Cuenta las notificaciones que son específicamente de chat
+  int get totalUnreadChatMessages {
+    return notifications.where((n) {
+      if (n['isRead'] == true) return false;
+      var datos = n['datos'];
+      
+      // Si por alguna razón la BD lo mandó como texto plano, lo convertimos a Mapa
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+      
+      return datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE';
+    }).length;
+  }
+
+  int getUnreadCountForChat(String incidenciaId) {
+    return notifications.where((n) {
+      if (n['isRead'] == true) return false;
+      var datos = n['datos'];
+      
+      if (datos is String) {
+        try { datos = jsonDecode(datos); } catch (_) {}
+      }
+      
+      return datos != null && 
+             datos is Map && 
+             datos['tipo'] == 'NUEVO_MENSAJE' && 
+             // Usamos .toString() en ambos lados para evitar el error de (Int vs String)
+             datos['incidenciaId']?.toString() == incidenciaId.toString();
+    }).length;
+  }
   // --- CARGAR REPORTES DESDE LA API ---
   Future<void> loadReports() async {
     _isLoading = true;
@@ -79,7 +175,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
         _reports.clear();
         
         for (var jsonReport in apiReports) {
-          _reports.add(_mapBackendToReport(jsonReport));
+          _reports.add(Report.fromJson(jsonReport));
         }
 
         // También cargamos las notificaciones al refrescar reportes
@@ -116,8 +212,8 @@ class StudentDashboardViewModel extends ChangeNotifier {
           idAula: idAula, 
           imagePath: imagePath,
         );
-
-        _reports.insert(0, _mapBackendToReport(newApiReport));
+        
+        _reports.insert(0, Report.fromJson(newApiReport));
         await loadNotifications();
       }
     } catch (e) {
@@ -152,77 +248,7 @@ class StudentDashboardViewModel extends ChangeNotifier {
     }
   }
 
-  // --- MAPPER: Backend JSON a Frontend Model ---
-  Report _mapBackendToReport(Map<String, dynamic> json) {
-    String? imageUrl;
-    
-    // 1. Extraemos la imagen de Cloudinary
-    if (json['imagenes'] != null && (json['imagenes'] as List).isNotEmpty) {
-      imageUrl = json['imagenes'][0]['url']; 
-    }
-    String? incId;
-    if (json['incidencia'] != null) {
-      incId = json['incidencia']['id'].toString();
-    }   
-
-    // REPORTANTE
-    String nombreReportante = 'Usuario Desconocido';
-    if (json['reportante'] != null) {
-      nombreReportante = json['reportante']['username'] ?? json['reportante']['email'] ?? 'Usuario';
-    }
-
-    // AULA
-    String aula = 'Aula no asignada';
-    if (json['aula'] != null) {
-      if (json['aula'] is Map<String, dynamic>) {
-        aula = json['aula']['nombre'] ?? 'Aula no asignada';
-      } else {
-        aula = json['aula'].toString();
-      }
-    }
-
-    // EDIFICIO
-    String edificio = 'Edificio no asignado';
-    if (json['aula'] != null && json['aula']['edificio'] != null) {
-      if (json['aula']['edificio'] is Map<String, dynamic>) {
-        edificio = json['aula']['edificio']['nombre'] ?? 'Edificio no asignado';
-      } else {
-        // Por si alguna vez mandan solo el texto en lugar del objeto
-        edificio = json['aula']['edificio'].toString();
-      }
-    }
-
-    // AREA
-    ReportArea areaInferida = ReportArea.sistema;
-    final tipoStr = (json['tipo'] ?? '').toLowerCase();
-    if (tipoStr.contains('limpieza') || tipoStr.contains('basura') || tipoStr.contains('derrame')) {
-      areaInferida = ReportArea.limpieza;
-    } else if (tipoStr.contains('silla') || tipoStr.contains('puerta') || tipoStr.contains('pizarrón')) {
-      areaInferida = ReportArea.mantenimiento;
-    }
-
-    // MODELO TOTAL
-    return Report(
-      id: json['id'].toString(),
-      incidenciaId: incId, // <-- NUEVO
-      title: json['titulo'] ?? 'Sin título',
-      area: areaInferida,
-      classroom: aula, 
-      building: edificio, 
-      dateTime: json['fechaCreacion'] != null ? DateTime.parse(json['fechaCreacion']).toLocal() : DateTime.now(),
-      details: json['descripcion'] ?? 'Sin detalles',
-      status: _parseStatus(json['estado']),
-      reportedBy: nombreReportante,
-      imageUrl: imageUrl,
-    );
-  }
   
-  ReportStatus _parseStatus(String? status) {
-    if (status == 'ACEPTADO') return ReportStatus.enProceso;
-    if (status == 'RECHAZADO') return ReportStatus.resuelto;
-    return ReportStatus.pendiente; // 'NUEVO'
-  }
-
   List<dynamic> _aulasRaw = [];
   List<dynamic> _edificios = [];
   bool _isLoadingUbicaciones = false;

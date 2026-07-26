@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../../data/models/report.dart';
 import '../../../../core/theme.dart';
-import '../../../widgets/report_card.dart';
+import '../../../widgets/agora_incident_card.dart';
 import '../../view_models/student_dashboard_view_model.dart';
+import '../../../widgets/custom_empty_state.dart';
+import '../../../widgets/custom_buttons.dart';
+import '../../../widgets/agora_network_image.dart';
 
 class StudentIncidentsTab extends StatelessWidget {
   final StudentDashboardViewModel viewModel;
@@ -16,37 +19,14 @@ class StudentIncidentsTab extends StatelessWidget {
     required this.onSeeAllChats,
   });
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final localReportDate = dateTime.toLocal();
-    final difference = now.difference(localReportDate);
-
-    if (difference.inMinutes < 1) {
-      return 'Hace un momento';
-    } else if (difference.inMinutes < 60) {
-      return 'Hace ${difference.inMinutes} min';
-    } else if (difference.inHours < 24) {
-      return 'Hace ${difference.inHours} h';
-    } else if (difference.inDays == 1) {
-      return 'Hace 1 día';
-    } else {
-      return 'Hace ${difference.inDays} días';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    final allIncidents = viewModel.incidents.toList();
-    final now = DateTime.now();
-
-    final recentIncidents = allIncidents.where((r) {
-      final localDate = r.dateTime.toLocal();
-      final difference = now.difference(localDate);
-      return difference.inHours <= 24;
-    }).take(5).toList(); 
+    // Delegamos toda la responsabilidad de los datos al ViewModel
+    final allIncidents = viewModel.incidents;
+    final recentIncidents = viewModel.recentIncidents;
 
     return SingleChildScrollView(
       child: Column(
@@ -74,12 +54,10 @@ class StudentIncidentsTab extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      TextButton(
+                      AgoraTextButton(
+                        text: 'Ver todos',
+                        color: const Color(0xFFFBBF24),
                         onPressed: onSeeAllChats,
-                        child: const Text(
-                          'Ver todos',
-                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 13),
-                        ),
                       ),
                     ],
                   ),
@@ -88,19 +66,13 @@ class StudentIncidentsTab extends StatelessWidget {
                 SizedBox(
                   height: 180,
                   child: recentIncidents.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No hay reportes en las últimas 24h',
-                            style: TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                        )
+                      ? const CustomEmptyState(message: 'No hay reportes en las últimas 24h', icon: Icons.history_rounded)
                       : ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: recentIncidents.length,
                           itemBuilder: (context, index) {
-                            final item = recentIncidents[index];
-                            return _buildRecentCard(item);
+                            return _buildRecentCard(recentIncidents[index]);
                           },
                         ),
                 ),
@@ -115,17 +87,11 @@ class StudentIncidentsTab extends StatelessWidget {
                 _buildSectionHeader('Incidencias de Sistemas'),
                 const SizedBox(height: 8),
                 if (allIncidents.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text('No hay reportes activos.'),
-                  )
+                  const CustomEmptyState(message: 'No hay reportes activos.', icon: Icons.assignment_outlined)
                 else
-                  ...allIncidents.map((r) => ReportCard(
+                  ...allIncidents.map((r) => AgoraIncidentCard(
                         report: r,
-                        icon: Icons.computer_outlined,
-                        iconColor: const Color(0xFF3B82F6),
-                        isDark: isDark,
-                        trailingText: _getTimeAgo(r.dateTime),
+                        headerIconColor: const Color(0xFF3B82F6),
                         onTap: () => onShowDetail(r),
                       )),
               ],
@@ -149,13 +115,10 @@ class StudentIncidentsTab extends StatelessWidget {
             color: AppTheme.secondaryColor,
           ),
         ),
-        Text(
-          'Ver todos',
-          style: TextStyle(
-            color: AppTheme.primaryColor.withValues(alpha: 0.8), 
-            fontSize: 12, 
-            fontWeight: FontWeight.bold
-          ),
+        AgoraTextButton(
+          text: 'Ver todos',
+          color: AppTheme.primaryColor.withOpacity(0.8),
+          onPressed: () {},
         ),
       ],
     );
@@ -176,27 +139,27 @@ class StudentIncidentsTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  gradient: report.imageUrl == null
-                      ? LinearGradient(
-                          colors: [
-                            const Color(0xFF1E3A8A).withValues(alpha: 0.5),
-                            const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                          ],
-                        )
-                      : null,
-                  image: report.imageUrl != null
-                      ? DecorationImage(image: NetworkImage(report.imageUrl!), fit: BoxFit.cover)
-                      : null,
-                ),
                 child: report.imageUrl == null
-                    ? Center(
-                        child: Icon(Icons.settings_input_hdmi_rounded, color: Colors.blue.shade200, size: 32),
+                    ? Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF1E3A8A).withOpacity(0.5),
+                              const Color(0xFF3B82F6).withOpacity(0.2),
+                            ],
+                          ),
+                        ),
+                        child: Center(
+                          child: Icon(Icons.settings_input_hdmi_rounded, color: Colors.blue.shade200, size: 32),
+                        ),
                       )
-                    : null,
+                    : AgoraNetworkImage(
+                        imageUrl: report.imageUrl!,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
               ),
             ),
             const SizedBox(height: 8),

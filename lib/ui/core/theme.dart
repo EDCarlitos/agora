@@ -14,6 +14,9 @@ class AppTheme {
   static const Color errorColor = Color(0xFFDC2626); 
   static const Color successColor = Color(0xFF16A34A); 
 
+  static const Color infoColor = Color(0xFF3B82F6); // Para estados "En Proceso"
+  static const Color warningColor = Color(0xFFF59E0B); // Para estados "Pendientes" y áreas
+
   // ==========================================
   // MODO CLARO
   // ==========================================
