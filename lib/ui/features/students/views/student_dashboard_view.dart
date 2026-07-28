@@ -43,6 +43,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       _viewModel.loadReports();
       _viewModel.loadChats();
       _viewModel.startPolling(); 
+      _viewModel.syncOfflineReports();
     });
   }
   @override
@@ -74,14 +75,14 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         builder: (context) => CreateReportBottomSheet(
           reportedBy: widget.user.name,
           initialArea: selectedArea,
-          onReportCreated: (title, details, idEdificio, idAula, imageUrl) async {
+          onReportCreated: (title, details, idEdificio, idAula, imagePaths) async {
             await _viewModel.addReport(
               title: title,
               details: details,
               idEdificio: idEdificio,
               idAula: idAula,
               reportedBy: widget.user.name,
-              imagePath: imageUrl,
+              imagePaths: imagePaths,
             );
           },
         ),
@@ -350,7 +351,7 @@ class CreateReportBottomSheet extends StatefulWidget {
     String details,
     int idEdificio,
     int idAula,
-    String? imageUrl,
+    List<String> imagePaths,
   ) onReportCreated;
 
   const CreateReportBottomSheet({
@@ -368,12 +369,13 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _detailsController = TextEditingController();
-  
   bool _isSaving = false;
-  String? _selectedImageUrl;
-  final _picker = ImagePicker();
   
+  // CAMBIO: Manejamos una lista en lugar de un String
+  final List<XFile> _selectedImages = [];
+  final _picker = ImagePicker();
   final _viewModel = StudentDashboardViewModel();
+  
   int? _selectedEdificioId;
   int? _selectedAulaId;
 
@@ -391,16 +393,23 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
   }
 
   void _pickAndUploadImage() async {
+    if (_selectedImages.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Máximo 3 fotografías permitidas.')),
+      );
+      return;
+    }
+
     final source = await ImageSourceBottomSheet.show(context);
     if (source == null) return;
 
     try {
       final XFile? file = await _picker.pickImage(source: source, imageQuality: 80);
-      if (file == null) return;
-
-      setState(() {
-        _selectedImageUrl = file.path;
-      });
+      if (file != null) {
+        setState(() {
+          _selectedImages.add(file);
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -412,16 +421,31 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
 
   void _save() {
     if (_formKey.currentState!.validate() && _selectedEdificioId != null && _selectedAulaId != null) {
+      
+      // VALIDACIÓN: 1 a 3 fotos obligatorias
+      if (_selectedImages.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Debes adjuntar al menos 1 fotografía de evidencia.', style: TextStyle(color: Colors.white)), 
+            backgroundColor: AppTheme.errorColor
+          ),
+        );
+        return;
+      }
+
       setState(() {
         _isSaving = true;
       });
+
+      // CAMBIO: Extraemos los paths de la lista
+      List<String> paths = _selectedImages.map((f) => f.path).toList();
 
       widget.onReportCreated(
         _titleController.text,
         _detailsController.text,
         _selectedEdificioId!,
         _selectedAulaId!,
-        _selectedImageUrl,
+        paths, // Pasamos la lista al callback
       );
       
       Navigator.pop(context);
@@ -480,7 +504,6 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                   if (_viewModel.isLoadingUbicaciones) {
                     return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
                   }
-
                   final aulasDisponibles = _selectedEdificioId != null 
                       ? _viewModel.getAulasPorEdificio(_selectedEdificioId!) 
                       : [];
@@ -543,37 +566,54 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
               ),
               const SizedBox(height: 16),
               
-              const CustomLabel(text: 'Imagen de Referencia'),
-              if (_selectedImageUrl != null)
-                Stack(
-                  children: [
-                    Container(
-                      height: 120,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: FileImage(File(_selectedImageUrl!)), 
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedImageUrl = null;
-                          });
-                        },
-                        child: const CircleAvatar(
-                          radius: 12,
-                          backgroundColor: Colors.black54,
-                          child: Icon(Icons.close, size: 14, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CustomLabel(text: 'Evidencia Fotográfica (${_selectedImages.length}/3)'),
+                  if (_selectedImages.length < 3)
+                    AgoraTextButton(
+                      text: '+ Agregar',
+                      onPressed: _pickAndUploadImage,
+                    )
+                ],
+              ),
+              
+              if (_selectedImages.isNotEmpty)
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _selectedImages.length,
+                    itemBuilder: (context, index) {
+                      return Stack(
+                        children: [
+                          Container(
+                            width: 100,
+                            margin: const EdgeInsets.only(right: 12, top: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              image: DecorationImage(
+                                image: FileImage(File(_selectedImages[index].path)),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedImages.removeAt(index)),
+                              child: const CircleAvatar(
+                                radius: 12,
+                                backgroundColor: AppTheme.errorColor,
+                                child: Icon(Icons.close, size: 14, color: Colors.white)
+                              ),
+                            ),
+                          )
+                        ],
+                      );
+                    },
+                  ),
                 )
               else
                 AgoraSecondaryButton(
@@ -581,6 +621,7 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                   icon: Icons.add_a_photo_outlined,
                   onPressed: _pickAndUploadImage,
                 ),
+
               const SizedBox(height: 16),
               
               const CustomLabel(text: 'Detalles del Reporte'),

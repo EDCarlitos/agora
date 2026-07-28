@@ -87,16 +87,23 @@ class NotificationService {
 
   /// Obtiene el token de FCM del dispositivo.
   Future<String?> getDeviceToken() async {
-    if (_cachedFcmToken != null) return _cachedFcmToken;
-    try {
-      if (_messaging != null) {
-        _cachedFcmToken = await _messaging!.getToken();
-      }
-    } catch (e) {
-      debugPrint('Error al obtener FCM token: $e');
+  if (_cachedFcmToken != null) return _cachedFcmToken;
+  try {
+    if (_messaging != null) {
+      // Agrega el timeout aquí para evitar el bloqueo de Firebase
+      _cachedFcmToken = await _messaging!.getToken().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('Firebase getToken() tardó demasiado en responder.');
+          return null; 
+        },
+      );
     }
-    return _cachedFcmToken;
+  } catch (e) {
+    debugPrint('Error al obtener FCM token: $e');
   }
+  return _cachedFcmToken;
+}
 
   /// Registra el token FCM del dispositivo en el servidor backend al iniciar sesión.
   Future<bool> registerDeviceToken(String jwtToken) async {

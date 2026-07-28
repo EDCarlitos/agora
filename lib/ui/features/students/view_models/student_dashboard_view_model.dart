@@ -1,35 +1,48 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/services/report_service.dart';
-import '../../../../data/services/auth_service.dart'; // Importante para obtener el token
+import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/notification_service.dart';
 import '../../../../data/services/aula_service.dart';
 import '../../../../data/services/chat_service.dart';
 import '../../widgets/shared_chats_tab.dart';
+import '../../../../data/services/connectivity_service.dart';
+import '../../../../data/services/local_database_service.dart';
 
-class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel { // <-- 2. Agrega "implements IChatViewModel"
+class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel {
   static final StudentDashboardViewModel _instance = StudentDashboardViewModel._internal();
   factory StudentDashboardViewModel() => _instance;
+  StreamSubscription? _connectivitySubscription;
   
   StudentDashboardViewModel._internal() {
     loadReports();
     loadNotifications();
+    _startNetworkListener();
   }
 
   final ReportService _reportService = ReportService();
   final NotificationService _notificationService = NotificationService();
   final List<Report> _reports = [];
-  final ChatService _chatService = ChatService(); // <-- Instancia del nuevo servicio
+  final ChatService _chatService = ChatService(); 
   final AulaService _aulaService = AulaService();
-  
-  // Lista de notificaciones cargada dinámicamente desde el backend
   final List<Map<String, dynamic>> notifications = [];
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+
+  void _startNetworkListener() {
+    _connectivitySubscription = ConnectivityService().onConnectivityChanged.listen((results) {
+      // Si la lista de resultados NO contiene "none", significa que hay internet
+      if (!results.contains(ConnectivityResult.none)) {
+        debugPrint('Internet detectado. Intentando sincronizar reportes offline...');
+        syncOfflineReports();
+      }
+    });
+  }
   
   List<Report> get allReports => _reports;
   List<Report> get incidents => _reports..sort((a, b) => b.dateTime.compareTo(a.dateTime));
@@ -50,6 +63,12 @@ class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel
     
     filtered.sort((a, b) => b.dateTime.compareTo(a.dateTime));
     return filtered;
+  }
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel(); // Evitar fugas de memoria
+    stopPolling();
+    super.dispose();
   }
 
 
@@ -163,6 +182,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
              datos['incidenciaId']?.toString() == incidenciaId.toString();
     }).length;
   }
+  
   // --- CARGAR REPORTES DESDE LA API ---
   Future<void> loadReports() async {
     _isLoading = true;
@@ -196,32 +216,96 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
     required int idEdificio,
     required int idAula,
     required String reportedBy,
-    String? imagePath, 
+    required List<String> imagePaths, // <-- CAMBIO: Ahora recibe la lista
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final token = AuthService().token;
-      if (token != null) {
-        final newApiReport = await _reportService.createReport(
-          jwtToken: token,
-          titulo: title,
-          descripcion: details,
-          idEdificio: idEdificio,
-          idAula: idAula, 
-          imagePath: imagePath,
+      final hasConnection = await ConnectivityService().isConnected;
+
+      if (hasConnection) {
+        // MODO ONLINE: Enviar directo a la API
+        final token = AuthService().token;
+        if (token != null) {
+          final newApiReport = await _reportService.createReport(
+            jwtToken: token,
+            titulo: title,
+            descripcion: details,
+            idEdificio: idEdificio,
+            idAula: idAula,
+            imagePaths: imagePaths,
+          );
+          
+          _reports.insert(0, Report.fromJson(newApiReport));
+          await loadNotifications();
+        }
+      } else {
+        // MODO OFFLINE: Guardar en SQLite
+        final offlineReport = Report(
+          id: 'local_${DateTime.now().millisecondsSinceEpoch}',
+          title: title,
+          classroom: idAula.toString(), // Truco: guardamos el ID para sincronizar luego
+          building: idEdificio.toString(), // Truco: guardamos el ID
+          dateTime: DateTime.now(),
+          details: details,
+          status: ReportStatus.pendiente,
+          reportedBy: reportedBy,
+          // Guardamos las rutas de las fotos separadas por comas
+          imageUrl: imagePaths.isNotEmpty ? imagePaths.join(',') : null, 
+          area: ReportArea.sistema,
         );
         
-        _reports.insert(0, Report.fromJson(newApiReport));
-        await loadNotifications();
+        await LocalDatabaseService().saveIncident(offlineReport);
+        _reports.insert(0, offlineReport); // Lo mostramos en la UI para que el usuario no sienta que se perdió
       }
     } catch (e) {
-      debugPrint('Error al guardar en API: $e');
+      debugPrint('Error al procesar el reporte: $e');
     }
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  // --- SINCRONIZAR REPORTES PENDIENTES ---
+  Future<void> syncOfflineReports() async {
+    final hasConnection = await ConnectivityService().isConnected;
+    if (!hasConnection) return;
+
+    final token = AuthService().token;
+    if (token == null) return;
+
+    try {
+      // Obtenemos los reportes que se guardaron offline (los que tienen prefijo 'local_')
+      final allLocal = await LocalDatabaseService().getIncidents();
+      final pendingReports = allLocal.where((r) => r.id.startsWith('local_')).toList();
+
+      for (var localReq in pendingReports) {
+        List<String> paths = localReq.imageUrl != null && localReq.imageUrl!.isNotEmpty 
+            ? localReq.imageUrl!.split(',') 
+            : [];
+
+        // Los enviamos a la API
+        await _reportService.createReport(
+          jwtToken: token,
+          titulo: localReq.title,
+          descripcion: localReq.details,
+          idEdificio: int.parse(localReq.building), // Recuperamos los IDs
+          idAula: int.parse(localReq.classroom),
+          imagePaths: paths,
+        );
+
+        // Si se envió con éxito, lo borramos de SQLite
+        await LocalDatabaseService().deleteIncident(localReq.id);
+      }
+      
+      // Recargamos los reportes reales de la API
+      if (pendingReports.isNotEmpty) {
+        await loadReports();
+      }
+    } catch (e) {
+      debugPrint('Error sincronizando reportes offline: $e');
+    }
   }
 
   Future<void> markNotificationsAsRead() async {

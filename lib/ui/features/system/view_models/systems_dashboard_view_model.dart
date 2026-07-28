@@ -131,6 +131,7 @@ final ChatService _chatService = ChatService();
     }
     if (hasChanges) notifyListeners();
   }
+  
   Future<void> loadDashboardData(User currentUser) async {
     _isLoading = true;
     notifyListeners();
@@ -240,6 +241,36 @@ final ChatService _chatService = ChatService();
       return false;
     } catch (e) {
       debugPrint('Error al finalizar incidencia: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Rechazar un reporte (PATCH /reports/:id/reject)
+  Future<bool> rejectReport(int reporteId, User currentUser) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final token = AuthService().token;
+      if (token == null) return false;
+
+      final url = Uri.parse('${ApiConfig.baseUrl}/reports/$reporteId/reject');
+      final response = await http.patch(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        await loadDashboardData(currentUser); // Recargamos para quitarlo de "Disponibles"
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error al rechazar reporte: $e');
       return false;
     } finally {
       _isLoading = false;

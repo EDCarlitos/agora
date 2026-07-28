@@ -1,7 +1,8 @@
 enum ReportStatus {
   pendiente,
   enProceso,
-  resuelto;
+  resuelto,
+  rechazado; 
 
   String get displayName {
     switch (this) {
@@ -11,6 +12,8 @@ enum ReportStatus {
         return 'En Proceso';
       case ReportStatus.resuelto:
         return 'Resuelto';
+      case ReportStatus.rechazado:
+        return 'Rechazado';
     }
   }
 }
@@ -70,8 +73,8 @@ class Report {
 
     ReportStatus parsedStatus = ReportStatus.pendiente;
     if (json['estado'] == 'ACEPTADO') parsedStatus = ReportStatus.enProceso;
-    if (json['estado'] == 'FINALIZADO' || json['estado'] == 'RECHAZADO') parsedStatus = ReportStatus.resuelto;
-
+    if (json['estado'] == 'FINALIZADO') parsedStatus = ReportStatus.resuelto; 
+    if (json['estado'] == 'RECHAZADO') parsedStatus = ReportStatus.rechazado; 
     String? incId;
     String? evidenciaUrl;
 

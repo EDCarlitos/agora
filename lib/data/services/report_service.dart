@@ -47,7 +47,7 @@ class ReportService {
     required String descripcion,
     required int idEdificio,
     required int idAula,
-    String? imagePath, // Ruta local de la imagen
+    List<String>? imagePaths, // <-- CAMBIO: Ahora es una lista
   }) async {
     var request = http.MultipartRequest('POST', Uri.parse(reportsUrl));
     
@@ -60,11 +60,13 @@ class ReportService {
     request.fields['idEdificio'] = idEdificio.toString();
     request.fields['idAula'] = idAula.toString();
 
-    // ADJUNTAR IMAGEN (Con la llave "imagenes")
-    if (imagePath != null && imagePath.isNotEmpty) {
-      request.files.add(
-        await http.MultipartFile.fromPath('imagenes', imagePath),
-      );
+    // ADJUNTAR IMÁGENES (Con la llave "imagenes" que espera tu backend de Express)
+    if (imagePaths != null && imagePaths.isNotEmpty) {
+      for (String path in imagePaths) {
+        request.files.add(
+          await http.MultipartFile.fromPath('imagenes', path),
+        );
+      }
     }
 
     final streamedResponse = await request.send();

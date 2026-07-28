@@ -9,9 +9,9 @@ class SystemUtils {
     
     ReportStatus parsedStatus = ReportStatus.pendiente;
     if (json['estado'] == 'ACEPTADO') parsedStatus = ReportStatus.enProceso;
-    if (json['estado'] == 'FINALIZADO' || json['estado'] == 'RECHAZADO') parsedStatus = ReportStatus.resuelto;
+    if (json['estado'] == 'FINALIZADO') parsedStatus = ReportStatus.resuelto;
+    if (json['estado'] == 'RECHAZADO') parsedStatus = ReportStatus.rechazado; // <-- NUEVO MAPEO
     
-    // --- NUEVO: Validar también el estado de la incidencia ---
     if (json['incidencia'] != null) {
       final incEstado = json['incidencia']['estado'];
       if (incEstado == 'finalizada' || incEstado == 'cerrada') {

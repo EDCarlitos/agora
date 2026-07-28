@@ -87,13 +87,16 @@ class AuthService {
       final url = Uri.parse('${ApiConfig.baseUrl}/auth/login');
       
       final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'emailOrUsername': email.trim(),
-          'password': password
-        }),
-      );
+  url,
+  headers: {'Content-Type': 'application/json'},
+  body: jsonEncode({
+    'emailOrUsername': email.trim(),
+    'password': password
+  }),
+).timeout(const Duration(seconds: 10), onTimeout: () {
+  // ¡Esto detendrá la carga infinita y mostrará el error en la UI!
+  throw Exception('Tiempo de espera agotado. El servidor no responde en la IP configurada.');
+});
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

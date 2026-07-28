@@ -70,9 +70,11 @@ class StudentAccountTab extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: report.status == ReportStatus.resuelto
                             ? Colors.green.withValues(alpha: 0.1)
-                            : report.status == ReportStatus.enProceso
-                                ? Colors.blue.withValues(alpha: 0.1)
-                                : Colors.amber.withValues(alpha: 0.1),
+                            : report.status == ReportStatus.rechazado // <-- COLOR ROJO FONDO
+                                ? Colors.red.withValues(alpha: 0.1)
+                                : report.status == ReportStatus.enProceso
+                                    ? Colors.blue.withValues(alpha: 0.1)
+                                    : Colors.amber.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -80,9 +82,11 @@ class StudentAccountTab extends StatelessWidget {
                         style: TextStyle(
                           color: report.status == ReportStatus.resuelto
                               ? Colors.green
-                              : report.status == ReportStatus.enProceso
-                                  ? Colors.blue
-                                  : Colors.amber.shade700,
+                              : report.status == ReportStatus.rechazado // <-- COLOR ROJO TEXTO
+                                  ? Colors.red
+                                  : report.status == ReportStatus.enProceso
+                                      ? Colors.blue
+                                      : Colors.amber.shade700,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),

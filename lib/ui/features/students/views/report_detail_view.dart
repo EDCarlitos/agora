@@ -118,6 +118,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
 
     final isStaff = widget.currentUser.role != UserRole.estudiante;
     final isResolved = _currentReport.status == ReportStatus.resuelto;
+    final isRejected = _currentReport.status == ReportStatus.rechazado; // <-- NUEVA
     final isMyReport = _currentReport.reportedBy == widget.currentUser.name || _currentReport.reportedBy == widget.currentUser.email;
     final showActionPanel = isStaff || isMyReport;
 
@@ -194,10 +195,12 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: isResolved
-                                  ? AppTheme.successColor.withOpacity(0.15)
-                                  : _currentReport.status == ReportStatus.enProceso
-                                      ? AppTheme.infoColor.withOpacity(0.15)
-                                      : AppTheme.primaryColor.withOpacity(0.15),
+                                  ? AppTheme.successColor.withValues(alpha: 0.15)
+                                  : isRejected 
+                                      ? AppTheme.errorColor.withValues(alpha: 0.15)
+                                      : _currentReport.status == ReportStatus.enProceso
+                                          ? AppTheme.infoColor.withValues(alpha: 0.15)
+                                          : AppTheme.primaryColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -205,9 +208,11 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                               style: TextStyle(
                                 color: isResolved
                                     ? AppTheme.successColor
-                                    : _currentReport.status == ReportStatus.enProceso
-                                        ? AppTheme.infoColor
-                                        : AppTheme.primaryColor,
+                                    : isRejected // <-- NUEVO COLOR TEXTO
+                                        ? AppTheme.errorColor
+                                        : _currentReport.status == ReportStatus.enProceso
+                                            ? AppTheme.infoColor
+                                            : AppTheme.primaryColor,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -304,82 +309,116 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                     ),
                   ],
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start, // <-- ESTA LÍNEA ARREGLA EL DESCUADRE
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // --- NUEVA LÓGICA DE BOTONES PARA STAFF ---
+                    // --- FILA SUPERIOR: Botones de Acción (Rechazar / Asignarme / Resolver) ---
                     if (isStaff && _currentReport.status == ReportStatus.pendiente) ...[
-                      Expanded(
-                        child: AgoraPrimaryButton(
-                          text: 'Asignarme',
-                          icon: Icons.assignment_ind_rounded,
-                          onPressed: () async {
-                            final success = await SystemsDashboardViewModel().assignReportToMe(
-                              int.parse(_currentReport.id), 
-                              widget.currentUser
-                            );
-                            if (success && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Incidencia asignada a ti.'), backgroundColor: AppTheme.successColor),
-                              );
-                              Navigator.pop(context, true); 
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ] else if (isStaff && _currentReport.status == ReportStatus.enProceso) ...[
-                      Expanded(
-                        child: AgoraSecondaryButton(
-                          text: 'Resolver',
-                          icon: Icons.check_circle_outline_rounded,
-                          color: AppTheme.successColor,
-                          onPressed: _isResolving ? null : _resolveReport,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-
-                    // --- BOTÓN DE CHAT ---
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      Row(
                         children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: AgoraPrimaryButton(
-                              text: isResolved ? 'Ver Chat' : 'Abrir Chat',
-                              icon: Icons.forum_outlined,
-                              onPressed: _currentReport.status == ReportStatus.pendiente
-                                  ? null 
-                                  : () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ChatRoomView(
-                                            report: _currentReport,
-                                            currentUser: widget.currentUser,
-                                          ),
-                                        ),
-                                      );
-                                    },
+                          Expanded(
+                            child: AgoraSecondaryButton(
+                              text: 'Rechazar',
+                              icon: Icons.cancel_outlined,
+                              color: AppTheme.errorColor,
+                              onPressed: () async {
+                                final success = await SystemsDashboardViewModel().rejectReport(
+                                  int.parse(_currentReport.id),
+                                  widget.currentUser
+                                );
+                                if (success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Reporte rechazado y descartado.'), backgroundColor: AppTheme.errorColor),
+                                  );
+                                  Navigator.pop(context, true); 
+                                }
+                              },
                             ),
                           ),
-                          if (_currentReport.status == ReportStatus.pendiente)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Text(
-                                isStaff ? 'Asígnate la incidencia para chatear.' : 'En espera de un técnico.',
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  color: isDark ? Colors.white54 : Colors.black54,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AgoraPrimaryButton(
+                              text: 'Asignarme',
+                              icon: Icons.assignment_ind_rounded,
+                              onPressed: () async {
+                                final success = await SystemsDashboardViewModel().assignReportToMe(
+                                  int.parse(_currentReport.id),
+                                   widget.currentUser
+                                );
+                                if (success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Incidencia asignada a ti.'), backgroundColor: AppTheme.successColor),
+                                  );
+                                  Navigator.pop(context, true); 
+                                }
+                              },
                             ),
+                          ),
                         ],
                       ),
+                      const SizedBox(height: 12), // Espaciado entre la fila superior y el botón de chat
+                    ] else if (isStaff && _currentReport.status == ReportStatus.enProceso) ...[
+                      AgoraSecondaryButton(
+                        text: 'Resolver',
+                        icon: Icons.check_circle_outline_rounded,
+                        color: AppTheme.successColor,
+                        onPressed: _isResolving ? null : _resolveReport,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // --- FILA INFERIOR: BOTÓN DE CHAT ---
+                    // --- FILA INFERIOR: BOTÓN DE CHAT ---
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AgoraPrimaryButton(
+                          text: isResolved ? 'Ver Chat' : 'Abrir Chat',
+                          icon: Icons.forum_outlined,
+                          // Bloquear el botón si es PENDIENTE o RECHAZADO:
+                          onPressed: (_currentReport.status == ReportStatus.pendiente || _currentReport.status == ReportStatus.rechazado)
+                              ? null
+                              : () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatRoomView(
+                                        report: _currentReport,
+                                        currentUser: widget.currentUser,
+                                      ),
+                                    ),
+                                  );
+                                },
+                        ),
+                        if (_currentReport.status == ReportStatus.pendiente)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              isStaff ? 'Asígnate la incidencia para chatear.' : 'En espera de un técnico.',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: isDark ? Colors.white54 : Colors.black54,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        if (_currentReport.status == ReportStatus.rechazado)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              'Reporte rechazado. El chat no está disponible.',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: AppTheme.errorColor,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
