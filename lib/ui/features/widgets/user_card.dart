@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
+import '../../core/theme.dart';
 
 class UserCard extends StatelessWidget {
   final User user;
@@ -15,18 +16,19 @@ class UserCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Card(
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        side: BorderSide(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : AppTheme.secondaryColor.withValues(alpha: 0.1),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -36,90 +38,153 @@ class UserCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    color: const Color(0xFFD9CFC4),
-                    child: Icon(
-                      Icons.person,
-                      size: 32,
-                      color: const Color(0xFF7A6050),
-                    ),
+                // Avatar con las iniciales o la imagen
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.15),
+                  child: user.photoUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            user.photoUrl!,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.person_rounded,
+                              color: AppTheme.primaryColor,
+                              size: 28,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          user.name.isNotEmpty
+                              ? user.name.substring(0, 1).toUpperCase()
+                              : 'U',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        user.email,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.hintColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                // Badge de rol
+                const SizedBox(width: 8),
+                // Badge del rol
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _badgeColor(user.role),
+                    color: _badgeColor(user.role, isDark),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    user.role.name.toUpperCase(),
+                    user.role.displayName,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: _badgeTextColor(user.role),
-                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.bold,
+                      color: _badgeTextColor(user.role, isDark),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              user.name,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3D2B1F),
-              ),
+            const SizedBox(height: 14),
+            Divider(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : AppTheme.secondaryColor.withValues(alpha: 0.1),
             ),
-            const SizedBox(height: 2),
-            Text(
-              user.email,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF7A6050),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1, color: Color(0xFFEDE8E0)),
             const SizedBox(height: 10),
             Row(
               children: [
-                // Editar
-                IconButton(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                  color: const Color(0xFF7A6050),
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                // Editar usuario
+                InkWell(
+                  onTap: onEdit,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Editar',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 16),
-                // Eliminar
-                IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                  color: const Color(0xFFCC4444),
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                const SizedBox(width: 12),
+                // Eliminar usuario
+                InkWell(
+                  onTap: onDelete,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: theme.colorScheme.error,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Eliminar',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 Text(
-                  'Joined ${_formatDate()}',
-                  style: const TextStyle(
+                  'ID: #${user.id}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
                     fontSize: 11,
-                    color: Color(0xFFAA9988),
                   ),
                 ),
               ],
@@ -130,42 +195,33 @@ class UserCard extends StatelessWidget {
     );
   }
 
-  String _formatDate() {
-    final now = DateTime.now();
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${now.day} ${months[now.month - 1]} ${now.year}';
-  }
-
-  Color _badgeColor(UserRole role) {
+  Color _badgeColor(UserRole role, bool isDark) {
     switch (role) {
       case UserRole.administrador:
-        return const Color(0xFFFFE8E8);
+        return isDark ? Colors.red.withValues(alpha: 0.2) : const Color(0xFFFFE8E8);
       case UserRole.estudiante:
-        return const Color(0xFFEAEAEA);
+        return isDark ? Colors.blue.withValues(alpha: 0.2) : const Color(0xFFE8F0FF);
       case UserRole.sistemas:
-        return const Color(0xFFE8F0FF);
+        return isDark ? Colors.purple.withValues(alpha: 0.2) : const Color(0xFFF3E8FF);
       case UserRole.limpieza:
-        return const Color(0xFFE8F8EE);
+        return isDark ? Colors.teal.withValues(alpha: 0.2) : const Color(0xFFE8F8EE);
       case UserRole.mantenimiento:
-        return const Color(0xFFFFF3E0);
+        return isDark ? Colors.orange.withValues(alpha: 0.2) : const Color(0xFFFFF3E0);
     }
   }
 
-  Color _badgeTextColor(UserRole role) {
+  Color _badgeTextColor(UserRole role, bool isDark) {
     switch (role) {
       case UserRole.administrador:
-        return const Color(0xFFCC4444);
+        return isDark ? Colors.redAccent : const Color(0xFFDC2626);
       case UserRole.estudiante:
-        return const Color(0xFF555555);
+        return isDark ? Colors.blueAccent : const Color(0xFF2563EB);
       case UserRole.sistemas:
-        return const Color(0xFF2255CC);
+        return isDark ? Colors.purpleAccent : const Color(0xFF9333EA);
       case UserRole.limpieza:
-        return const Color(0xFF226633);
+        return isDark ? Colors.tealAccent : const Color(0xFF0D9488);
       case UserRole.mantenimiento:
-        return const Color(0xFF996600);
+        return isDark ? Colors.orangeAccent : const Color(0xFFD97706);
     }
   }
 }

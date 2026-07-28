@@ -8,6 +8,8 @@ import 'ui/features/login/views/login_view.dart';
 import 'ui/features/students/views/student_dashboard_view.dart';
 import 'ui/features/other_roles/role_stubs.dart';
 import 'ui/features/system/views/systems_dashboard_view.dart';
+import 'ui/features/admin/views/admin_dashboard_shell.dart';
+import 'ui/features/admin/view_models/users_view_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -106,7 +108,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           onLogout: _logoutUser,
         );
       case UserRole.administrador:
-        return RoleDashboardStub(
+        return AdminDashboardShell(
           user: user,
           onLogout: _logoutUser,
         );

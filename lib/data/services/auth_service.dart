@@ -138,12 +138,19 @@ class AuthService {
     if (roleString == null) return UserRole.estudiante;
     
     switch (roleString.toUpperCase()) {
-      case 'ADMIN': return UserRole.administrador;
-      case 'SISTEMAS': return UserRole.sistemas;
-      case 'MANTENIMIENTO': return UserRole.mantenimiento;
-      case 'LIMPIEZA': return UserRole.limpieza;
+      case 'ADMIN':
+      case 'ADMINISTRADOR':
+        return UserRole.administrador;
+      case 'SISTEMAS':
+        return UserRole.sistemas;
+      case 'MANTENIMIENTO':
+        return UserRole.mantenimiento;
+      case 'LIMPIEZA':
+        return UserRole.limpieza;
+      case 'ESTUDIANTE':
       case 'USER':
-      default: return UserRole.estudiante;
+      default:
+        return UserRole.estudiante;
     }
   }
 }

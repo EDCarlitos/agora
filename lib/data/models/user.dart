@@ -42,7 +42,7 @@ class User {
       name: json['name'] as String,
       email: json['email'] as String,
       role: UserRole.values.firstWhere(
-        (e) => e.name == json['role'],
+        (e) => e.name.toLowerCase() == (json['role'] as String?)?.toLowerCase(),
         orElse: () => UserRole.estudiante,
       ),
     );
