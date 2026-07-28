@@ -3,8 +3,8 @@ import '../../../../data/models/user.dart';
 import '../../../core/theme.dart';
 import '../view_models/users_view_model.dart';
 import '../widgets/admin_drawer.dart';
-import 'admin_incidencias_table_view.dart';
-import 'admin_reports_table_view.dart';
+import 'admin_incidencias_dashboard_view.dart';
+import 'admin_reports_dashboard_view.dart';
 import 'admin_summary_view.dart';
 import 'users_view.dart';
 
@@ -34,9 +34,9 @@ class _AdminDashboardShellState extends State<AdminDashboardShell> {
       case 1:
         return 'Gestión de Usuarios';
       case 2:
-        return 'Tabla de Reportes';
+        return 'Dashboard de Reportes';
       case 3:
-        return 'Tabla de Incidencias';
+        return 'Dashboard de Incidencias';
       default:
         return 'Ágora Admin';
     }
@@ -56,9 +56,9 @@ class _AdminDashboardShellState extends State<AdminDashboardShell> {
           onLogout: widget.onLogout,
         );
       case 2:
-        return const AdminReportsTableView();
+        return const AdminReportsDashboardView();
       case 3:
-        return const AdminIncidenciasTableView();
+        return const AdminIncidenciasDashboardView();
       default:
         return AdminSummaryView(
           user: widget.user,

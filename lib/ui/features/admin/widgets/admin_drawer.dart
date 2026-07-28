@@ -112,8 +112,8 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           _DrawerItem(
-            icon: Icons.assignment_outlined,
-            title: 'Tabla de Reportes',
+            icon: Icons.assessment_outlined,
+            title: 'Dashboard de Reportes',
             isSelected: selectedIndex == 2,
             onTap: () {
               onSelectIndex(2);
@@ -122,7 +122,7 @@ class AdminDrawer extends StatelessWidget {
           ),
           _DrawerItem(
             icon: Icons.build_outlined,
-            title: 'Tabla de Incidencias',
+            title: 'Dashboard de Incidencias',
             isSelected: selectedIndex == 3,
             onTap: () {
               onSelectIndex(3);
