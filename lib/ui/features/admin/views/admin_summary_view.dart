@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../core/theme.dart';
 import '../../widgets/custom_buttons.dart';
+import '../widgets/admin_activity_tile.dart';
+import '../widgets/admin_summary_kpi_card.dart';
 
 class AdminSummaryView extends StatelessWidget {
   final User user;
@@ -24,77 +26,7 @@ class AdminSummaryView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Banner de Bienvenida
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF4A0E1A), AppTheme.primaryColor]
-                    : [AppTheme.primaryColor, const Color(0xFFB51A3E)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.admin_panel_settings, color: Colors.white, size: 14),
-                          SizedBox(width: 6),
-                          Text(
-                            'Panel de Administración',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      _formatCurrentDate(),
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '¡Bienvenido, ${user.name}!',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Resumen general del estado del sistema, métricas de reportes e incidencias institucionales.',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
+          _buildWelcomeBanner(isDark),
           const SizedBox(height: 24),
 
           // Título de Métricas KPI
@@ -112,7 +44,7 @@ class AdminSummaryView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Grid de Tarjetas KPI Responsivas (Overflow-Proof)
+          // Grid de Tarjetas KPI Responsivas
           LayoutBuilder(
             builder: (context, constraints) {
               final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
@@ -124,28 +56,28 @@ class AdminSummaryView extends StatelessWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: constraints.maxWidth > 600 ? 1.6 : 1.45,
                 children: [
-                  _KpiCard(
+                  AdminSummaryKpiCard(
                     title: 'Total Reportes',
                     value: '48',
                     icon: Icons.assignment_outlined,
                     color: AppTheme.primaryColor,
                     isDark: isDark,
                   ),
-                  _KpiCard(
+                  AdminSummaryKpiCard(
                     title: 'Finalizados',
                     value: '32',
                     icon: Icons.check_circle_outline,
                     color: AppTheme.successColor,
                     isDark: isDark,
                   ),
-                  _KpiCard(
+                  AdminSummaryKpiCard(
                     title: 'En Proceso',
                     value: '11',
                     icon: Icons.hourglass_bottom_outlined,
                     color: AppTheme.infoColor,
                     isDark: isDark,
                   ),
-                  _KpiCard(
+                  AdminSummaryKpiCard(
                     title: 'Rechazados',
                     value: '5',
                     icon: Icons.cancel_outlined,
@@ -159,71 +91,10 @@ class AdminSummaryView extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Distribución Visual de Estados
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : AppTheme.secondaryColor.withValues(alpha: 0.1),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Distribución de Reportes por Estado',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Barra de Progreso Multi-Color
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      height: 14,
-                      child: Row(
-                        children: [
-                          Expanded(flex: 32, child: Container(color: AppTheme.successColor)),
-                          Expanded(flex: 11, child: Container(color: AppTheme.infoColor)),
-                          Expanded(flex: 5, child: Container(color: AppTheme.errorColor)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Leyenda Adaptable (Wrap)
-                  Wrap(
-                    alignment: WrapAlignment.spaceAround,
-                    runSpacing: 8,
-                    spacing: 12,
-                    children: [
-                      _LegendItem(
-                        color: AppTheme.successColor,
-                        label: '67% Finalizados',
-                      ),
-                      _LegendItem(
-                        color: AppTheme.infoColor,
-                        label: '23% En Proceso',
-                      ),
-                      _LegendItem(
-                        color: AppTheme.errorColor,
-                        label: '10% Rechazados',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildDistributionCard(theme, isDark),
           const SizedBox(height: 24),
 
-          // Accesos Rápidos & Actividad
+          // Actividad Reciente del Sistema
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -260,7 +131,7 @@ class AdminSummaryView extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _ActivityTile(
+                AdminActivityTile(
                   icon: Icons.check_circle,
                   iconColor: AppTheme.successColor,
                   title: 'Incidencia #104 Finalizada',
@@ -269,7 +140,7 @@ class AdminSummaryView extends StatelessWidget {
                   isDark: isDark,
                 ),
                 const Divider(height: 1),
-                _ActivityTile(
+                AdminActivityTile(
                   icon: Icons.cancel,
                   iconColor: AppTheme.errorColor,
                   title: 'Reporte #108 Rechazado',
@@ -278,7 +149,7 @@ class AdminSummaryView extends StatelessWidget {
                   isDark: isDark,
                 ),
                 const Divider(height: 1),
-                _ActivityTile(
+                AdminActivityTile(
                   icon: Icons.person_add,
                   iconColor: AppTheme.primaryColor,
                   title: 'Nuevo Usuario Registrado',
@@ -290,10 +161,133 @@ class AdminSummaryView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // Acceso Rápido a Usuarios
-          const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWelcomeBanner(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF4A0E1A), AppTheme.primaryColor]
+              : [AppTheme.primaryColor, const Color(0xFFB51A3E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.admin_panel_settings, color: Colors.white, size: 14),
+                    SizedBox(width: 6),
+                    Text(
+                      'Panel de Administración',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                _formatCurrentDate(),
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '¡Bienvenido, ${user.name}!',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Resumen general del estado del sistema, métricas de reportes e incidencias institucionales.',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDistributionCard(ThemeData theme, bool isDark) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : AppTheme.secondaryColor.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Distribución de Reportes por Estado',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                height: 14,
+                child: Row(
+                  children: [
+                    Expanded(flex: 32, child: Container(color: AppTheme.successColor)),
+                    Expanded(flex: 11, child: Container(color: AppTheme.infoColor)),
+                    Expanded(flex: 5, child: Container(color: AppTheme.errorColor)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Wrap(
+              alignment: WrapAlignment.spaceAround,
+              runSpacing: 8,
+              spacing: 12,
+              children: [
+                _LegendItem(color: AppTheme.successColor, label: '67% Finalizados'),
+                _LegendItem(color: AppTheme.infoColor, label: '23% En Proceso'),
+                _LegendItem(color: AppTheme.errorColor, label: '10% Rechazados'),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -305,81 +299,6 @@ class AdminSummaryView extends StatelessWidget {
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
     ];
     return '${now.day} ${months[now.month - 1]} ${now.year}';
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final bool isDark;
-
-  const _KpiCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.1)
-              : AppTheme.secondaryColor.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : AppTheme.secondaryColor.withValues(alpha: 0.8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: color.withValues(alpha: 0.15),
-                child: Icon(icon, size: 14, color: color),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -405,47 +324,6 @@ class _LegendItem extends StatelessWidget {
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ],
-    );
-  }
-}
-
-class _ActivityTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final String time;
-  final bool isDark;
-
-  const _ActivityTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 18,
-        backgroundColor: iconColor.withValues(alpha: 0.15),
-        child: Icon(icon, color: iconColor, size: 18),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
-      ),
-      trailing: Text(
-        time,
-        style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.black38),
-      ),
     );
   }
 }
