@@ -1,5 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../../data/models/user.dart';
+import '../../../../data/services/auth_service.dart';
+import '../../../../data/services/report_service.dart';
 import '../../../core/theme.dart';
 import '../../widgets/custom_buttons.dart';
 import '../widgets/admin_activity_tile.dart';
@@ -26,7 +31,7 @@ class AdminSummaryView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Banner de Bienvenida
-          _buildWelcomeBanner(isDark),
+          _buildWelcomeBanner(context, isDark),
           const SizedBox(height: 24),
 
           // Título de Métricas KPI
@@ -166,7 +171,7 @@ class AdminSummaryView extends StatelessWidget {
     );
   }
 
-  Widget _buildWelcomeBanner(bool isDark) {
+  Widget _buildWelcomeBanner(BuildContext context, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -235,9 +240,202 @@ class AdminSummaryView extends StatelessWidget {
             'Resumen general del estado del sistema, métricas de reportes e incidencias institucionales.',
             style: TextStyle(color: Colors.white70, fontSize: 13),
           ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primaryColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            icon: const Icon(Icons.picture_as_pdf, size: 18),
+            label: const Text(
+              'Descargar PDF de Auditoría',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            onPressed: () => _showMonthYearDialog(context),
+          ),
         ],
       ),
     );
+  }
+
+  void _showMonthYearDialog(BuildContext context) {
+    int selectedMonth = DateTime.now().month;
+    int selectedYear = DateTime.now().year;
+
+    const months = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.picture_as_pdf, color: AppTheme.primaryColor),
+                  SizedBox(width: 8),
+                  Text('Auditoría Mensual PDF'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Selecciona el periodo para generar el reporte:'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    initialValue: selectedMonth,
+                    decoration: const InputDecoration(
+                      labelText: 'Mes',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(12, (index) {
+                      return DropdownMenuItem<int>(
+                        value: index + 1,
+                        child: Text(months[index]),
+                      );
+                    }),
+                    onChanged: (val) {
+                      if (val != null) setStateDialog(() => selectedMonth = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: selectedYear,
+                    decoration: const InputDecoration(
+                      labelText: 'Año',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [2024, 2025, 2026, 2027].map((y) {
+                      return DropdownMenuItem<int>(
+                        value: y,
+                        child: Text('$y'),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setStateDialog(() => selectedYear = val);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Generar PDF'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _handleDownloadPdf(context, selectedMonth, selectedYear);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleDownloadPdf(BuildContext context, int month, int year) async {
+    final token = AuthService().token;
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay sesión activa para descargar el PDF.')),
+      );
+      return;
+    }
+
+    bool dialogShown = false;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        dialogShown = true;
+        return const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Generando reporte PDF...'),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      debugPrint('Solicitando PDF de auditoría a la API ($month/$year)...');
+      final pdfBytes = await ReportService().downloadAuditPdf(token, month: month, year: year);
+      debugPrint('PDF recibido exitosamente: ${pdfBytes.length} bytes.');
+
+      final outputDir = await getTemporaryDirectory();
+      final filePath = '${outputDir.path}/auditoria_${month}_$year.pdf';
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes);
+      debugPrint('PDF guardado en disco: $filePath');
+
+      if (context.mounted && dialogShown) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogShown = false;
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF generado correctamente (${pdfBytes.length} bytes).'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Abrir',
+              onPressed: () => OpenFilex.open(filePath),
+            ),
+          ),
+        );
+      }
+
+      // Lanzar visualizador de PDF en segundo plano sin congelar la app
+      OpenFilex.open(filePath).then((result) {
+        debugPrint('OpenFilex resultado: ${result.type} - ${result.message}');
+      }).catchError((err) {
+        debugPrint('Error en OpenFilex: $err');
+      });
+
+    } catch (e) {
+      debugPrint('Error al generar PDF: $e');
+      if (context.mounted && dialogShown) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogShown = false;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar PDF: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildDistributionCard(ThemeData theme, bool isDark) {

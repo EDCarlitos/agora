@@ -1,5 +1,6 @@
 import '../../utils/api_config.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ReportService {
@@ -77,6 +78,35 @@ class ReportService {
       return decodedData['reporte'];
     } else {
       throw Exception('Error al crear el reporte: ${response.body}');
+    }
+  }
+
+  // 4. Descargar PDF de Auditoría Mensual
+  Future<Uint8List> downloadAuditPdf(String jwtToken, {int? month, int? year}) async {
+    final queryParams = <String, String>{};
+    if (month != null) queryParams['mes'] = month.toString();
+    if (year != null) queryParams['anio'] = year.toString();
+
+    final uri = Uri.parse('$reportsUrl/audit/pdf').replace(
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $jwtToken',
+      },
+    ).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {
+        throw Exception('La respuesta de la API para el PDF excedió el tiempo límite (20s).');
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      throw Exception('Error al descargar el PDF de auditoría: ${response.statusCode} - ${response.body}');
     }
   }
 }
