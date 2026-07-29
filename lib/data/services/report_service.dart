@@ -109,4 +109,23 @@ class ReportService {
       throw Exception('Error al descargar el PDF de auditoría: ${response.statusCode} - ${response.body}');
     }
   }
+
+  // 5. Obtener métricas y estadísticas reales para el Dashboard
+  Future<Map<String, dynamic>> getSummaryStats(String jwtToken) async {
+    final response = await http.get(
+      Uri.parse('$reportsUrl/stats'),
+      headers: {
+        'Authorization': 'Bearer $jwtToken',
+      },
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw Exception('Tiempo de espera agotado al consultar métricas del servidor.'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Error al obtener estadísticas de la API: ${response.statusCode}');
+    }
+  }
 }

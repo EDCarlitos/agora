@@ -10,7 +10,7 @@ import '../../widgets/custom_buttons.dart';
 import '../widgets/admin_activity_tile.dart';
 import '../widgets/admin_summary_kpi_card.dart';
 
-class AdminSummaryView extends StatelessWidget {
+class AdminSummaryView extends StatefulWidget {
   final User user;
   final VoidCallback onNavigateToUsers;
 
@@ -19,6 +19,28 @@ class AdminSummaryView extends StatelessWidget {
     required this.user,
     required this.onNavigateToUsers,
   });
+
+  @override
+  State<AdminSummaryView> createState() => _AdminSummaryViewState();
+}
+
+class _AdminSummaryViewState extends State<AdminSummaryView> {
+  Future<Map<String, dynamic>>? _statsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  void _loadStats() {
+    final token = AuthService().token;
+    if (token != null && token.isNotEmpty) {
+      setState(() {
+        _statsFuture = ReportService().getSummaryStats(token);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,136 +56,206 @@ class AdminSummaryView extends StatelessWidget {
           _buildWelcomeBanner(context, isDark),
           const SizedBox(height: 24),
 
-          // Título de Métricas KPI
+          // Título de Métricas KPI con botón de refrescar
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.analytics_outlined, color: AppTheme.primaryColor, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Métricas de Incidencias',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  const Icon(Icons.analytics_outlined, color: AppTheme.primaryColor, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Métricas de Incidencias',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                tooltip: 'Actualizar métricas',
+                onPressed: _loadStats,
               ),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Grid de Tarjetas KPI Responsivas
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: crossAxisCount,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: constraints.maxWidth > 600 ? 1.6 : 1.45,
+          // Carga de datos reales mediante FutureBuilder
+          FutureBuilder<Map<String, dynamic>>(
+            future: _statsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Card(
+                  color: AppTheme.errorColor.withValues(alpha: 0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppTheme.errorColor),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Error al cargar métricas: ${snapshot.error}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _loadStats,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final stats = snapshot.data ?? {};
+              final totalReportes = stats['totalReportes'] ?? 0;
+              final aceptados = stats['aceptados'] ?? 0;
+              final nuevos = stats['nuevos'] ?? 0;
+              final rechazados = stats['rechazados'] ?? 0;
+              final recentActivity = (stats['recentActivity'] as List<dynamic>?) ?? [];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AdminSummaryKpiCard(
-                    title: 'Total Reportes',
-                    value: '48',
-                    icon: Icons.assignment_outlined,
-                    color: AppTheme.primaryColor,
-                    isDark: isDark,
+                  // Grid de Tarjetas KPI Responsivas con datos reales
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
+                      return GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: crossAxisCount,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: constraints.maxWidth > 600 ? 1.6 : 1.45,
+                        children: [
+                          AdminSummaryKpiCard(
+                            title: 'Total Reportes',
+                            value: '$totalReportes',
+                            icon: Icons.assignment_outlined,
+                            color: AppTheme.primaryColor,
+                            isDark: isDark,
+                          ),
+                          AdminSummaryKpiCard(
+                            title: 'Aceptados',
+                            value: '$aceptados',
+                            icon: Icons.check_circle_outline,
+                            color: AppTheme.successColor,
+                            isDark: isDark,
+                          ),
+                          AdminSummaryKpiCard(
+                            title: 'Nuevos / Pendientes',
+                            value: '$nuevos',
+                            icon: Icons.hourglass_bottom_outlined,
+                            color: AppTheme.infoColor,
+                            isDark: isDark,
+                          ),
+                          AdminSummaryKpiCard(
+                            title: 'Rechazados',
+                            value: '$rechazados',
+                            icon: Icons.cancel_outlined,
+                            color: AppTheme.errorColor,
+                            isDark: isDark,
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  AdminSummaryKpiCard(
-                    title: 'Finalizados',
-                    value: '32',
-                    icon: Icons.check_circle_outline,
-                    color: AppTheme.successColor,
-                    isDark: isDark,
+                  const SizedBox(height: 24),
+
+                  // Distribución Visual Real de Estados
+                  _buildDistributionCard(theme, isDark, totalReportes, aceptados, nuevos, rechazados),
+                  const SizedBox(height: 24),
+
+                  // Actividad Reciente del Sistema (Real de la BD)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Actividad Reciente del Sistema',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AgoraTextButton(
+                        text: 'Ir a Usuarios',
+                        onPressed: widget.onNavigateToUsers,
+                      ),
+                    ],
                   ),
-                  AdminSummaryKpiCard(
-                    title: 'En Proceso',
-                    value: '11',
-                    icon: Icons.hourglass_bottom_outlined,
-                    color: AppTheme.infoColor,
-                    isDark: isDark,
-                  ),
-                  AdminSummaryKpiCard(
-                    title: 'Rechazados',
-                    value: '5',
-                    icon: Icons.cancel_outlined,
-                    color: AppTheme.errorColor,
-                    isDark: isDark,
+                  const SizedBox(height: 12),
+
+                  // Lista de Actividad Reciente Real
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : AppTheme.secondaryColor.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: recentActivity.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Center(
+                              child: Text('No hay actividad reciente registrada.'),
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: recentActivity.length,
+                            separatorBuilder: (_, _) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final item = recentActivity[index];
+                              final estado = (item['estado'] ?? '').toString().toUpperCase();
+
+                              IconData icon = Icons.assignment;
+                              Color iconColor = AppTheme.infoColor;
+
+                              if (estado == 'ACEPTADO' || estado == 'FINALIZADA') {
+                                icon = Icons.check_circle;
+                                iconColor = AppTheme.successColor;
+                              } else if (estado == 'RECHAZADO') {
+                                icon = Icons.cancel;
+                                iconColor = AppTheme.errorColor;
+                              } else if (estado == 'NUEVO') {
+                                icon = Icons.fiber_new;
+                                iconColor = AppTheme.primaryColor;
+                              }
+
+                              return AdminActivityTile(
+                                icon: icon,
+                                iconColor: iconColor,
+                                title: 'Reporte #${item['id']} - ${item['titulo']}',
+                                subtitle: '${item['ubicacion']} • Por ${item['reportante']}',
+                                time: _formatRelativeTime(item['fechaCreacion']),
+                                isDark: isDark,
+                              );
+                            },
+                          ),
                   ),
                 ],
               );
             },
-          ),
-          const SizedBox(height: 24),
-
-          // Distribución Visual de Estados
-          _buildDistributionCard(theme, isDark),
-          const SizedBox(height: 24),
-
-          // Actividad Reciente del Sistema
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Actividad Reciente del Sistema',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              AgoraTextButton(
-                text: 'Ir a Usuarios',
-                onPressed: onNavigateToUsers,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Lista de Actividad Reciente
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : AppTheme.secondaryColor.withValues(alpha: 0.1),
-              ),
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                AdminActivityTile(
-                  icon: Icons.check_circle,
-                  iconColor: AppTheme.successColor,
-                  title: 'Incidencia #104 Finalizada',
-                  subtitle: 'Sofia Sistemas resolvió problema en Edificio Cómputo.',
-                  time: 'Hace 25 min',
-                  isDark: isDark,
-                ),
-                const Divider(height: 1),
-                AdminActivityTile(
-                  icon: Icons.cancel,
-                  iconColor: AppTheme.errorColor,
-                  title: 'Reporte #108 Rechazado',
-                  subtitle: 'Reporte rechazado por falta de evidencia gráfica clara.',
-                  time: 'Hace 1 hora',
-                  isDark: isDark,
-                ),
-                const Divider(height: 1),
-                AdminActivityTile(
-                  icon: Icons.person_add,
-                  iconColor: AppTheme.primaryColor,
-                  title: 'Nuevo Usuario Registrado',
-                  subtitle: 'Se dio de alta al usuario carlos_estudiante.',
-                  time: 'Hace 3 horas',
-                  isDark: isDark,
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 24),
         ],
@@ -228,7 +320,7 @@ class AdminSummaryView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '¡Bienvenido, ${user.name}!',
+            '¡Bienvenido, ${widget.user.name}!',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -438,7 +530,12 @@ class AdminSummaryView extends StatelessWidget {
     }
   }
 
-  Widget _buildDistributionCard(ThemeData theme, bool isDark) {
+  Widget _buildDistributionCard(ThemeData theme, bool isDark, int total, int aceptados, int nuevos, int rechazados) {
+    final denom = total > 0 ? total : 1;
+    final pAceptados = total > 0 ? ((aceptados / denom) * 100).round() : 0;
+    final pNuevos = total > 0 ? ((nuevos / denom) * 100).round() : 0;
+    final pRechazados = total > 0 ? ((rechazados / denom) * 100).round() : 0;
+
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -466,22 +563,25 @@ class AdminSummaryView extends StatelessWidget {
                 height: 14,
                 child: Row(
                   children: [
-                    Expanded(flex: 32, child: Container(color: AppTheme.successColor)),
-                    Expanded(flex: 11, child: Container(color: AppTheme.infoColor)),
-                    Expanded(flex: 5, child: Container(color: AppTheme.errorColor)),
+                    if (aceptados > 0 || total == 0)
+                      Expanded(flex: aceptados > 0 ? aceptados : 1, child: Container(color: AppTheme.successColor)),
+                    if (nuevos > 0)
+                      Expanded(flex: nuevos, child: Container(color: AppTheme.infoColor)),
+                    if (rechazados > 0)
+                      Expanded(flex: rechazados, child: Container(color: AppTheme.errorColor)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Wrap(
+            Wrap(
               alignment: WrapAlignment.spaceAround,
               runSpacing: 8,
               spacing: 12,
               children: [
-                _LegendItem(color: AppTheme.successColor, label: '67% Finalizados'),
-                _LegendItem(color: AppTheme.infoColor, label: '23% En Proceso'),
-                _LegendItem(color: AppTheme.errorColor, label: '10% Rechazados'),
+                _LegendItem(color: AppTheme.successColor, label: '$pAceptados% Aceptados'),
+                _LegendItem(color: AppTheme.infoColor, label: '$pNuevos% Nuevos'),
+                _LegendItem(color: AppTheme.errorColor, label: '$pRechazados% Rechazados'),
               ],
             ),
           ],
@@ -497,6 +597,17 @@ class AdminSummaryView extends StatelessWidget {
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
     ];
     return '${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  String _formatRelativeTime(String? dateStr) {
+    if (dateStr == null) return '';
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return '';
+    final diff = DateTime.now().difference(date.toLocal());
+    if (diff.inMinutes < 1) return 'Hace un momento';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
+    return 'Hace ${diff.inDays} d';
   }
 }
 
