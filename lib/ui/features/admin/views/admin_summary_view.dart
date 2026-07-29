@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/report_service.dart';
+import '../../../../data/services/weather_service.dart';
 import '../../../core/theme.dart';
 import '../../widgets/custom_buttons.dart';
 import '../widgets/admin_activity_tile.dart';
@@ -26,6 +27,7 @@ class AdminSummaryView extends StatefulWidget {
 
 class _AdminSummaryViewState extends State<AdminSummaryView> {
   Future<Map<String, dynamic>>? _statsFuture;
+  Future<WeatherData>? _weatherFuture;
 
   @override
   void initState() {
@@ -35,11 +37,12 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
 
   void _loadStats() {
     final token = AuthService().token;
-    if (token != null && token.isNotEmpty) {
-      setState(() {
+    setState(() {
+      _weatherFuture = WeatherService().getCurrentWeather();
+      if (token != null && token.isNotEmpty) {
         _statsFuture = ReportService().getSummaryStats(token);
-      });
-    }
+      }
+    });
   }
 
   @override
@@ -332,6 +335,48 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
             'Resumen general del estado del sistema, métricas de reportes e incidencias institucionales.',
             style: TextStyle(color: Colors.white70, fontSize: 13),
           ),
+          const SizedBox(height: 12),
+          FutureBuilder<WeatherData>(
+            future: _weatherFuture,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                final weather = snapshot.data!;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(weather.conditionIcon, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${weather.temperature.round()}°C  ${weather.conditionText}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.location_on, color: Colors.white70, size: 13),
+                      const SizedBox(width: 2),
+                      Text(
+                        weather.location,
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.air, color: Colors.white70, size: 13),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${weather.windSpeed} km/h',
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -355,6 +400,7 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
   }
 
   void _showMonthYearDialog(BuildContext context) {
+    final theme = Theme.of(context);
     int selectedMonth = DateTime.now().month;
     int selectedYear = DateTime.now().year;
 
