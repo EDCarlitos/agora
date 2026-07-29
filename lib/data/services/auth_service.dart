@@ -34,7 +34,7 @@ class AuthService {
       
 
       // 4. Extraemos el idToken para la API
-      final authentication = googleUser.authentication;
+      final authentication = await googleUser.authentication;
       final String? idToken = authentication.idToken;
 
       if (idToken == null) {
