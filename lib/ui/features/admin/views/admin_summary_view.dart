@@ -6,6 +6,7 @@ import '../../../../data/models/user.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/report_service.dart';
 import '../../../../data/services/weather_service.dart';
+import '../../../../data/models/weather_data.dart';
 import '../../../core/theme.dart';
 import '../../widgets/custom_buttons.dart';
 import '../widgets/admin_activity_tile.dart';

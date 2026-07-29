@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../data/models/report.dart';
 import '../../../../data/models/user.dart';
+import '../../../../data/models/chat.dart';
+import '../../../../data/models/chat_message.dart';
 import '../../../../data/services/chat_service.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../core/theme.dart';
@@ -95,7 +97,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
       // 1. Cargar Mensajes
       final chatData = await _chatService.getChatDetail(token, incidenciaId);
-      final msgsJson = chatData['mensajes'] as List;
+      final msgs = chatData.mensajes;
 
       // 2. Cargar Estado y Evidencia haciendo fetch al endpoint existente
       final url = Uri.parse('${ApiConfig.baseUrl}/incidencias/$incidenciaId');
@@ -118,7 +120,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
           )
         );
 
-        _messages.addAll(msgsJson.map((m) => _parseApiMessage(m)).toList());
+        _messages.addAll(msgs.map((m) => _parseChatMessage(m)).toList());
         _isLoading = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -129,18 +131,17 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       }
     }
   }
-  // Mapea el JSON de la BD a nuestra clase Message
-  Message _parseApiMessage(Map<String, dynamic> m) {
-    final enviadoPor = m['enviadoPor'];
-    // Validar si fue enviado por nosotros comparando username o email
+  // Mapea el modelo ChatMessage a nuestra clase Message de la vista
+  Message _parseChatMessage(ChatMessage m) {
+    final enviadoPor = m.enviadoPor;
     final isOutgoing = (enviadoPor == widget.currentUser.name || enviadoPor == widget.currentUser.email);
-    final isImagen = m['tipo'] == 'imagen';
+    final isImagen = m.tipo == 'imagen';
 
     return Message(
-      text: isImagen ? '' : m['mensaje'],
-      imageUrl: isImagen ? m['mensaje'] : null,
+      text: isImagen ? '' : m.mensaje,
+      imageUrl: isImagen ? m.mensaje : null,
       isOutgoing: isOutgoing,
-      time: DateTime.parse(m['fechaEnvio']).toLocal(),
+      time: m.fechaEnvio.toLocal(),
     );
   }
 
@@ -171,7 +172,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       final incidenciaId = int.parse(incidenciaIdStr);
       final tipo = imagePath != null ? 'imagen' : 'mensaje';
 
-      final newMsgJson = await _chatService.sendMessage(
+      final newMsg = await _chatService.sendMessage(
         jwtToken: token,
         incidenciaId: incidenciaId,
         tipo: tipo,
@@ -180,7 +181,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       );
 
       setState(() {
-        _messages.add(_parseApiMessage(newMsgJson));
+        _messages.add(_parseChatMessage(newMsg));
         _isTyping = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());

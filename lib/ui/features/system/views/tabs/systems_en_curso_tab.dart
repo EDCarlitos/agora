@@ -33,11 +33,7 @@ class SystemsEnCursoTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
       itemBuilder: (context, index) {
-        final jsonReport = items[index];
-        final incidencia = jsonReport['incidencia'];
-        
-        final report = Report.fromJson(jsonReport, overrideId: incidencia['id'].toString())
-          .copyWith(status: ReportStatus.enProceso);
+        final report = items[index];
 
         return AgoraIncidentCard(
           report: report,
@@ -71,17 +67,20 @@ class SystemsEnCursoTab extends StatelessWidget {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (context) => IncidentResolutionForm(
-                          incidenciaId: incidencia['id'],
-                          onSubmit: (descripcion, imagePaths) async {
-                            final success = await viewModel.resolveIncident(incidencia['id'], descripcion, imagePaths, user);
-                            if (success && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Incidencia finalizada correctamente.'), backgroundColor: Colors.green),
-                              );
-                            }
-                          },
-                        ),
+                        builder: (context) {
+                          final incId = int.tryParse(report.incidenciaId ?? report.id) ?? 0;
+                          return IncidentResolutionForm(
+                            incidenciaId: incId,
+                            onSubmit: (descripcion, imagePaths) async {
+                              final success = await viewModel.resolveIncident(incId, descripcion, imagePaths, user);
+                              if (success && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Incidencia finalizada correctamente.'), backgroundColor: Colors.green),
+                                );
+                              }
+                            },
+                          );
+                        },
                       );
                     },
                   ),

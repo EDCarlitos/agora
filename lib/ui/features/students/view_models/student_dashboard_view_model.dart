@@ -4,6 +4,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../../../data/models/report.dart';
+import '../../../../data/models/aula.dart';
+import '../../../../data/models/chat.dart';
+import '../../../../data/models/app_notification.dart';
 import '../../../../data/services/report_service.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/notification_service.dart';
@@ -29,7 +32,7 @@ class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel
   final List<Report> _reports = [];
   final ChatService _chatService = ChatService(); 
   final AulaService _aulaService = AulaService();
-  final List<Map<String, dynamic>> notifications = [];
+  final List<AppNotification> notifications = [];
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -55,8 +58,6 @@ class StudentDashboardViewModel extends ChangeNotifier implements IChatViewModel
   }
 
   List<Report> getMyReports(User user) {
-    // Filtramos estrictamente bajo la condición de que el reportante
-    // coincida con el nombre de usuario o el correo de la sesión actual.
     final filtered = _reports.where((r) => 
       r.reportedBy == user.name || r.reportedBy == user.email
     ).toList();
@@ -78,33 +79,51 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
 
     bool hasChanges = false;
 
-    // 1. Buscamos y actualizamos localmente (para que la UI reaccione instantáneamente)
-    for (var n in notifications) {
-      if (n['isRead'] == true) continue;
-      
-      var datos = n['datos'];
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
+    for (int i = 0; i < notifications.length; i++) {
+      final n = notifications[i];
+      if (n.leido) continue;
 
-      if (datos != null && 
-          datos is Map && 
-          datos['tipo'] == 'NUEVO_MENSAJE' && 
-          datos['incidenciaId']?.toString() == incidenciaId.toString()) {
-        
-        n['isRead'] = true; 
+      if (n.incidenciaId == incidenciaId.toString()) {
+        notifications[i] = AppNotification(
+          id: n.id,
+          titulo: n.titulo,
+          mensaje: n.mensaje,
+          tipo: n.tipo,
+          leido: true,
+          fecha: n.fecha,
+          incidenciaId: n.incidenciaId,
+        );
         hasChanges = true;
-        
-        // 2. Le avisamos a la API que esta notificación específica ya fue leída
-        await _notificationService.markAsRead(token, n['id']);
+        await _notificationService.markAsRead(token, n.id);
       }
     }
 
-    // 3. Si hubo cambios, repintamos la UI (desaparece el badge verde/rojo)
     if (hasChanges) {
       notifyListeners();
     }
   }
+
+  Future<void> markNotificationsAsRead() async {
+    final token = AuthService().token;
+    if (token == null) return;
+    for (int i = 0; i < notifications.length; i++) {
+      final n = notifications[i];
+      if (!n.leido) {
+        notifications[i] = AppNotification(
+          id: n.id,
+          titulo: n.titulo,
+          mensaje: n.mensaje,
+          tipo: n.tipo,
+          leido: true,
+          fecha: n.fecha,
+          incidenciaId: n.incidenciaId,
+        );
+      }
+    }
+    notifyListeners();
+    await _notificationService.markAllAsRead(token);
+  }
+
   // --- CARGAR NOTIFICACIONES DESDE LA API ---
   Future<void> loadNotifications() async {
     try {
@@ -112,18 +131,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
       if (token != null) {
         final apiNotifications = await _notificationService.getNotifications(token);
         notifications.clear();
-        for (var n in apiNotifications) {
-          notifications.add({
-            'id': n['id'].toString(),
-            'title': n['titulo'] ?? 'Notificación',
-            'body': n['cuerpo'] ?? '',
-            'time': n['fechaCreacion'] != null
-                ? DateTime.parse(n['fechaCreacion']).toLocal().toString().substring(0, 16)
-                : 'Ahora',
-            'isRead': n['leida'] ?? false,
-            'datos': n['datos'], // <-- ¡NUEVO! Capturamos los datos extra de tu API
-          });
-        }
+        notifications.addAll(apiNotifications);
         notifyListeners();
       }
     } catch (e) {
@@ -131,18 +139,13 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
     }
   }
 
-  // ==========================================
-  // --- NUEVA LÓGICA DE POLLING Y CONTADORES
-  // ==========================================
   Timer? _pollingTimer;
 
   void startPolling() {
-    // Evita crear múltiples timers
     if (_pollingTimer != null) return; 
     
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       loadNotifications();
-      // Opcional: loadChats() si también quieres que la lista de chats se refresque sola
     });
   }
 
@@ -151,38 +154,16 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
     _pollingTimer = null;
   }
 
-  // Cuenta las notificaciones que son específicamente de chat
+  @override
   int get totalUnreadChatMessages {
-    return notifications.where((n) {
-      if (n['isRead'] == true) return false;
-      var datos = n['datos'];
-      
-      // Si por alguna razón la BD lo mandó como texto plano, lo convertimos a Mapa
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
-      
-      return datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE';
-    }).length;
+    return notifications.where((n) => !n.leido && n.tipo == 'NUEVO_MENSAJE').length;
   }
 
+  @override
   int getUnreadCountForChat(String incidenciaId) {
-    return notifications.where((n) {
-      if (n['isRead'] == true) return false;
-      var datos = n['datos'];
-      
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
-      
-      return datos != null && 
-             datos is Map && 
-             datos['tipo'] == 'NUEVO_MENSAJE' && 
-             // Usamos .toString() en ambos lados para evitar el error de (Int vs String)
-             datos['incidenciaId']?.toString() == incidenciaId.toString();
-    }).length;
+    return notifications.where((n) => !n.leido && n.incidenciaId == incidenciaId.toString()).length;
   }
-  
+
   // --- CARGAR REPORTES DESDE LA API ---
   Future<void> loadReports() async {
     _isLoading = true;
@@ -193,10 +174,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
       if (token != null) {
         final apiReports = await _reportService.getReports(token);
         _reports.clear();
-        
-        for (var jsonReport in apiReports) {
-          _reports.add(Report.fromJson(jsonReport));
-        }
+        _reports.addAll(apiReports);
 
         // También cargamos las notificaciones al refrescar reportes
         await loadNotifications();
@@ -216,7 +194,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
     required int idEdificio,
     required int idAula,
     required String reportedBy,
-    required List<String> imagePaths, // <-- CAMBIO: Ahora recibe la lista
+    required List<String> imagePaths,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -225,7 +203,6 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
       final hasConnection = await ConnectivityService().isConnected;
 
       if (hasConnection) {
-        // MODO ONLINE: Enviar directo a la API
         final token = AuthService().token;
         if (token != null) {
           final newApiReport = await _reportService.createReport(
@@ -237,7 +214,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
             imagePaths: imagePaths,
           );
           
-          _reports.insert(0, Report.fromJson(newApiReport));
+          _reports.insert(0, newApiReport);
           await loadNotifications();
         }
       } else {
@@ -308,18 +285,6 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
     }
   }
 
-  Future<void> markNotificationsAsRead() async {
-    for (var n in notifications) {
-      n['isRead'] = true;
-    }
-    notifyListeners();
-
-    final token = AuthService().token;
-    if (token != null) {
-      await _notificationService.markAllAsRead(token);
-    }
-  }
-
   Future<void> updateReportStatus(String id, ReportStatus newStatus, {String? imageUrl, String? evidenceUrl}) async {
     // TODO: Falta el endpoint PUT/PATCH en el backend. Por ahora actualizamos en RAM.
     final index = _reports.indexWhere((r) => r.id == id);
@@ -333,13 +298,13 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
   }
 
   
-  List<dynamic> _aulasRaw = [];
-  List<dynamic> _edificios = [];
+  List<Aula> _aulasRaw = [];
+  List<Edificio> _edificios = [];
   bool _isLoadingUbicaciones = false;
 
   bool get isLoadingUbicaciones => _isLoadingUbicaciones;
-  List<dynamic> get edificios => _edificios;
-  List<dynamic> get aulasRaw => _aulasRaw;
+  List<Edificio> get edificios => _edificios;
+  List<Aula> get aulasRaw => _aulasRaw;
 
   Future<void> loadUbicaciones() async {
     // Si ya las cargamos antes, no hacemos la petición de nuevo
@@ -354,11 +319,11 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
         _aulasRaw = await _aulaService.getAulas(token);
         
         // Extraer edificios únicos
-        final Map<int, dynamic> edificiosMap = {};
+        final Map<int, Edificio> edificiosMap = {};
         for (var aula in _aulasRaw) {
-          final edif = aula['edificio'];
+          final edif = aula.edificio;
           if (edif != null) {
-            edificiosMap[edif['id']] = edif;
+            edificiosMap[edif.id] = edif;
           }
         }
         _edificios = edificiosMap.values.toList();
@@ -374,10 +339,10 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
   // ==========================================
   // --- CHATS DESDE LA API ---
   // ==========================================
-  List<dynamic> _chats = [];
+  List<Chat> _chats = [];
   bool _isLoadingChats = false;
 
-  List<dynamic> get chats => _chats;
+  List<Chat> get chats => _chats;
   bool get isLoadingChats => _isLoadingChats;
 
   Future<void> loadChats() async {
@@ -398,7 +363,7 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
   }
   
   // Filtrar aulas dependiendo del edificio seleccionado
-  List<dynamic> getAulasPorEdificio(int edificioId) {
-    return _aulasRaw.where((a) => a['idEdificio'] == edificioId).toList();
+  List<Aula> getAulasPorEdificio(int edificioId) {
+    return _aulasRaw.where((a) => a.idEdificio == edificioId).toList();
   }
 }

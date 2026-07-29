@@ -32,8 +32,7 @@ class SystemsDisponiblesTab extends StatelessWidget {
           icon: Icons.inbox_outlined);
     }
 
-    // Convertimos la lista de JSON a objetos Report
-    final List<Report> reports = items.map((json) => SystemUtils.parseToReport(json)).toList();
+    final List<Report> reports = items;
     
     // Tomamos los primeros 5 para el carrusel superior
     final List<Report> recentReports = reports.take(5).toList();

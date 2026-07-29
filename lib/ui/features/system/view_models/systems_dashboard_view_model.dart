@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../../data/models/user.dart';
+import '../../../../data/models/report.dart';
+import '../../../../data/models/chat.dart';
+import '../../../../data/models/app_notification.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../../data/services/report_service.dart';
 import '../../../../data/services/chat_service.dart';
@@ -24,20 +27,21 @@ class SystemsDashboardViewModel extends ChangeNotifier implements IChatViewModel
   bool get isLoading => _isLoading;
 
 
-  List<dynamic> _availableReports = []; 
-  List<dynamic> _myInProgressIncidents = []; 
-  List<dynamic> _myResolvedIncidents = []; 
+  List<Report> _availableReports = []; 
+  List<Report> _myInProgressIncidents = []; 
+  List<Report> _myResolvedIncidents = []; 
   
-  List<dynamic> get availableReports => _availableReports;
-  List<dynamic> get myInProgressIncidents => _myInProgressIncidents;
-  List<dynamic> get myResolvedIncidents => _myResolvedIncidents;
+  List<Report> get availableReports => _availableReports;
+  List<Report> get myInProgressIncidents => _myInProgressIncidents;
+  List<Report> get myResolvedIncidents => _myResolvedIncidents;
 
-final ChatService _chatService = ChatService();
+  final ChatService _chatService = ChatService();
   final NotificationService _notificationService = NotificationService();
   
-  List<dynamic> _chats = [];
-  List<dynamic> get chats => _chats;
-  final List<Map<String, dynamic>> notifications = [];
+  List<Chat> _chats = [];
+  @override
+  List<Chat> get chats => _chats;
+  final List<AppNotification> notifications = [];
   
   Timer? _pollingTimer;
 
@@ -71,15 +75,7 @@ final ChatService _chatService = ChatService();
       if (token != null) {
         final apiNotifications = await _notificationService.getNotifications(token);
         notifications.clear();
-        for (var n in apiNotifications) {
-          notifications.add({
-            'id': n['id'].toString(),
-            'title': n['titulo'] ?? 'Notificación',
-            'body': n['cuerpo'] ?? '',
-            'isRead': n['leida'] ?? false,
-            'datos': n['datos'], 
-          });
-        }
+        notifications.addAll(apiNotifications);
         notifyListeners();
       }
     } catch (e) {
@@ -88,28 +84,12 @@ final ChatService _chatService = ChatService();
   }
 
   int get totalUnreadChatMessages {
-    return notifications.where((n) {
-      if (n['isRead'] == true) return false;
-      var datos = n['datos'];
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
-      return datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE';
-    }).length;
+    return notifications.where((n) => !n.leido && n.tipo == 'NUEVO_MENSAJE').length;
   }
 
+  @override
   int getUnreadCountForChat(String incidenciaId) {
-    return notifications.where((n) {
-      if (n['isRead'] == true) return false;
-      var datos = n['datos'];
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
-      return datos != null &&
-          datos is Map &&
-          datos['tipo'] == 'NUEVO_MENSAJE' &&
-          datos['incidenciaId']?.toString() == incidenciaId.toString();
-    }).length;
+    return notifications.where((n) => !n.leido && n.incidenciaId == incidenciaId.toString()).length;
   }
 
   Future<void> markChatNotificationsAsRead(String incidenciaId) async {
@@ -117,16 +97,21 @@ final ChatService _chatService = ChatService();
     if (token == null) return;
     bool hasChanges = false;
 
-    for (var n in notifications) {
-      if (n['isRead'] == true) continue;
-      var datos = n['datos'];
-      if (datos is String) {
-        try { datos = jsonDecode(datos); } catch (_) {}
-      }
-      if (datos != null && datos is Map && datos['tipo'] == 'NUEVO_MENSAJE' && datos['incidenciaId']?.toString() == incidenciaId.toString()) {
-        n['isRead'] = true; 
+    for (int i = 0; i < notifications.length; i++) {
+      final n = notifications[i];
+      if (n.leido) continue;
+      if (n.incidenciaId == incidenciaId.toString()) {
+        notifications[i] = AppNotification(
+          id: n.id,
+          titulo: n.titulo,
+          mensaje: n.mensaje,
+          tipo: n.tipo,
+          leido: true,
+          fecha: n.fecha,
+          incidenciaId: n.incidenciaId,
+        );
         hasChanges = true;
-        await _notificationService.markAsRead(token, n['id']);
+        await _notificationService.markAsRead(token, n.id);
       }
     }
     if (hasChanges) notifyListeners();
@@ -142,33 +127,19 @@ final ChatService _chatService = ChatService();
         // 1. Obtenemos TODOS los reportes desde la API
         final apiReports = await _reportService.getReports(token);
         
-        // 2. Filtramos los "Disponibles" (Estado NUEVO y que correspondan a Sistemas)
+        // 2. Filtramos los "Disponibles" (Estado Pendiente / Nuevo)
         _availableReports = apiReports.where((r) {
-          final estado = r['estado'];
-          final tipo = (r['tipo'] ?? '').toString().toLowerCase();
-          // Inferimos el área igual que en el dashboard de estudiante
-          final isSistemas = !tipo.contains('limpieza') && !tipo.contains('basura') && !tipo.contains('silla'); 
-          return estado == 'NUEVO' && isSistemas;
+          return r.status == ReportStatus.pendiente;
         }).toList();
 
-        // 3. Filtramos "Mis Asignaciones" (Tienen incidencia, son mías, y están abiertas o en proceso)
+        // 3. Filtramos "Mis Asignaciones" (En proceso)
         _myInProgressIncidents = apiReports.where((r) {
-          final inc = r['incidencia'];
-          if (inc == null) return false;
-          
-          final isMine = inc['id_usuarioAministrativo'] == int.parse(currentUser.id);
-          final isActiva = inc['estado'] == 'abierta' || inc['estado'] == 'en_proceso' || inc['estado'] == 'reabierta';
-          return isMine && isActiva;
+          return r.status == ReportStatus.enProceso;
         }).toList();
 
-        // 4. Filtramos "Resueltos" (Tienen incidencia, son mías, y están finalizadas)
+        // 4. Filtramos "Resueltos" (Resueltos / Finalizados)
         _myResolvedIncidents = apiReports.where((r) {
-          final inc = r['incidencia'];
-          if (inc == null) return false;
-
-          final isMine = inc['id_usuarioAministrativo'] == int.parse(currentUser.id);
-          final isTerminada = inc['estado'] == 'finalizada' || inc['estado'] == 'cerrada';
-          return isMine && isTerminada;
+          return r.status == ReportStatus.resuelto;
         }).toList();
       }
     } catch (e) {

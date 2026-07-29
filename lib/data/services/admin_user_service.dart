@@ -2,21 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../utils/api_config.dart';
 import '../models/user.dart';
+import '../models/system_role.dart';
 import 'auth_service.dart';
-
-class SystemRole {
-  final int id;
-  final String nombre;
-
-  const SystemRole({required this.id, required this.nombre});
-
-  factory SystemRole.fromJson(Map<String, dynamic> json) {
-    return SystemRole(
-      id: json['id'] as int,
-      nombre: json['nombre'] as String,
-    );
-  }
-}
 
 class AdminUserService {
   static final AdminUserService _instance = AdminUserService._internal();

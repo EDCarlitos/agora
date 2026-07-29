@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../utils/api_config.dart';
+import '../models/app_notification.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -172,7 +173,7 @@ class NotificationService {
   }
 
   /// Obtiene la lista de notificaciones persistidas desde el backend.
-  Future<List<Map<String, dynamic>>> getNotifications(String jwtToken, {int page = 1, int limit = 20}) async {
+  Future<List<AppNotification>> getNotifications(String jwtToken, {int page = 1, int limit = 20}) async {
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/notifications?page=$page&limit=$limit');
       final response = await http.get(
@@ -186,7 +187,11 @@ class NotificationService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['notificaciones'] != null) {
-          return List<Map<String, dynamic>>.from(data['notificaciones']);
+          final List<dynamic> rawList = data['notificaciones'];
+          return rawList
+              .whereType<Map<String, dynamic>>()
+              .map((n) => AppNotification.fromJson(n))
+              .toList();
         }
       }
     } catch (e) {

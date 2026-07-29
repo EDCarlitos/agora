@@ -120,17 +120,17 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text(
-                              n['title'],
+                              n.titulo,
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
-                            subtitle: Text(n['body'], style: const TextStyle(fontSize: 12)),
+                            subtitle: Text(n.mensaje, style: const TextStyle(fontSize: 12)),
                             trailing: Text(
-                              n['time'],
+                              n.formattedTime,
                               style: TextStyle(color: theme.hintColor, fontSize: 10),
                             ),
                             leading: CircleAvatar(
                               radius: 4,
-                              backgroundColor: n['isRead'] ? Colors.transparent : AppTheme.primaryColor,
+                              backgroundColor: n.leido ? Colors.transparent : AppTheme.primaryColor,
                             ),
                           );
                         },
@@ -167,7 +167,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -177,7 +176,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     return ListenableBuilder(
       listenable: _viewModel,
       builder: (context, _) {
-        final unreadCount = _viewModel.notifications.where((n) => !n['isRead']).length;
+        final unreadCount = _viewModel.notifications.where((n) => !n.leido).length;
 
         return Scaffold(
           appBar: AppBar(
@@ -520,8 +519,8 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                               hintText: 'Ej: Edificio C',
                               items: _viewModel.edificios.map<DropdownMenuItem<int>>((edif) {
                                 return DropdownMenuItem<int>(
-                                  value: edif['id'],
-                                  child: Text(edif['nombre'], overflow: TextOverflow.ellipsis),
+                                  value: edif.id,
+                                  child: Text(edif.nombre, overflow: TextOverflow.ellipsis),
                                 );
                               }).toList(),
                               onChanged: (val) {
@@ -546,8 +545,8 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
                               hintText: 'Ej: Aula 102',
                               items: aulasDisponibles.map<DropdownMenuItem<int>>((aula) {
                                 return DropdownMenuItem<int>(
-                                  value: aula['id'],
-                                  child: Text(aula['nombre'], overflow: TextOverflow.ellipsis),
+                                  value: aula.id,
+                                  child: Text(aula.nombre, overflow: TextOverflow.ellipsis),
                                 );
                               }).toList(),
                               onChanged: _selectedEdificioId == null ? null : (val) {

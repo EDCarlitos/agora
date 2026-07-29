@@ -2,13 +2,14 @@ import '../../utils/api_config.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import '../models/report.dart';
 
 class ReportService {
   // Usamos el baseUrl de tu archivo de configuración y le agregamos el endpoint
   final String reportsUrl = '${ApiConfig.baseUrl}/reports';
   
   // 1. Obtener todos los reportes
-  Future<List<dynamic>> getReports(String jwtToken) async {
+  Future<List<Report>> getReports(String jwtToken) async {
     final response = await http.get(
       Uri.parse(reportsUrl),
       headers: {
@@ -18,14 +19,15 @@ class ReportService {
 
     if (response.statusCode == 200) {
       final decodedData = jsonDecode(response.body);
-      return decodedData['reportes'];
+      final List<dynamic> list = decodedData['reportes'] ?? [];
+      return list.map((item) => Report.fromJson(item as Map<String, dynamic>)).toList();
     } else {
       throw Exception('Error al cargar los reportes: ${response.body}');
     }
   }
 
   // 2. Obtener el detalle de un reporte por ID
-  Future<Map<String, dynamic>> getReportById(String jwtToken, int reportId) async {
+  Future<Report> getReportById(String jwtToken, int reportId) async {
     final response = await http.get(
       Uri.parse('$reportsUrl/$reportId'),
       headers: {
@@ -35,20 +37,20 @@ class ReportService {
 
     if (response.statusCode == 200) {
       final decodedData = jsonDecode(response.body);
-      return decodedData['reporte'];
+      return Report.fromJson(decodedData['reporte'] as Map<String, dynamic>);
     } else {
       throw Exception('Error al cargar el reporte: ${response.body}');
     }
   }
 
   // 3. Crear un nuevo reporte con imagen
-  Future<Map<String, dynamic>> createReport({
+  Future<Report> createReport({
     required String jwtToken,
     required String titulo,
     required String descripcion,
     required int idEdificio,
     required int idAula,
-    List<String>? imagePaths, // <-- CAMBIO: Ahora es una lista
+    List<String>? imagePaths,
   }) async {
     var request = http.MultipartRequest('POST', Uri.parse(reportsUrl));
     
@@ -61,7 +63,7 @@ class ReportService {
     request.fields['idEdificio'] = idEdificio.toString();
     request.fields['idAula'] = idAula.toString();
 
-    // ADJUNTAR IMÁGENES (Con la llave "imagenes" que espera tu backend de Express)
+    // ADJUNTAR IMÁGENES
     if (imagePaths != null && imagePaths.isNotEmpty) {
       for (String path in imagePaths) {
         request.files.add(
@@ -75,7 +77,7 @@ class ReportService {
 
     if (response.statusCode == 201) {
       final decodedData = jsonDecode(response.body);
-      return decodedData['reporte'];
+      return Report.fromJson(decodedData['reporte'] as Map<String, dynamic>);
     } else {
       throw Exception('Error al crear el reporte: ${response.body}');
     }

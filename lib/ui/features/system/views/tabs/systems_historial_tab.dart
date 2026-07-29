@@ -27,8 +27,7 @@ class SystemsHistorialTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
       itemBuilder: (context, index) {
-        final jsonReport = items[index];
-        final report = SystemUtils.parseToReport(jsonReport).copyWith(status: ReportStatus.resuelto);
+        final report = items[index];
 
         return AgoraIncidentCard(
           report: report,
