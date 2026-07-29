@@ -145,7 +145,7 @@ class _ReportDetailViewState extends State<ReportDetailView> {
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 100),
+            padding: EdgeInsets.only(bottom: 140 + MediaQuery.of(context).padding.bottom),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -298,7 +298,12 @@ class _ReportDetailViewState extends State<ReportDetailView> {
               right: 0,
               bottom: 0,
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 16 + MediaQuery.of(context).padding.bottom,
+                ),
                 decoration: BoxDecoration(
                   color: isDark ? AppTheme.offBlack : Colors.white,
                   boxShadow: [

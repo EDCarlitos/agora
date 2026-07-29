@@ -369,12 +369,23 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
+              scrollable: true,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Icons.picture_as_pdf, color: AppTheme.primaryColor),
-                  SizedBox(width: 8),
-                  Text('Auditoría Mensual PDF'),
+                  const Icon(Icons.picture_as_pdf, color: AppTheme.primaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Auditoría Mensual PDF',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
               content: Column(
@@ -388,6 +399,7 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
                     decoration: const InputDecoration(
                       labelText: 'Mes',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                     items: List.generate(12, (index) {
                       return DropdownMenuItem<int>(
@@ -405,6 +417,7 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
                     decoration: const InputDecoration(
                       labelText: 'Año',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                     items: [2024, 2025, 2026, 2027].map((y) {
                       return DropdownMenuItem<int>(
@@ -418,6 +431,7 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
                   ),
                 ],
               ),
+              actionsOverflowButtonSpacing: 8,
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
@@ -428,7 +442,7 @@ class _AdminSummaryViewState extends State<AdminSummaryView> {
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
                   ),
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Icons.download, size: 18),
                   label: const Text('Generar PDF'),
                   onPressed: () {
                     Navigator.of(dialogContext).pop();
