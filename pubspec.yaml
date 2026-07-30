@@ -55,19 +55,19 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/images/logo.png"
+  image_path: "assets/images/app_icon.png"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/app_icon.png"
     background_color: "#ffffff"
     theme_color: "#ffffff"
 
 flutter_native_splash:
   color: "#ffffff"
-  image: "assets/images/logo.png"
+  image: "assets/images/splashscreen_padded.png"
   android_12:
-    image: "assets/images/logo.png"
+    image: "assets/images/splashscreen_padded.png"
     color: "#ffffff"
   web: false
 
@@ -84,6 +84,10 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/images/app_icon.png
+    - assets/images/splashscreen.png
+    - assets/images/splashscreen_padded.png
+    - assets/images/ic_notification.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
