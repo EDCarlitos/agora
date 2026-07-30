@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/models/user.dart';
 import '../../core/theme.dart';
 import '../../../../data/models/report.dart';
+import '../../../../data/models/chat.dart';
 import '../common/views/chat_room_view.dart';
 import 'custom_empty_state.dart';
 
@@ -60,16 +61,35 @@ class SharedChatsTab extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 100),
                 separatorBuilder: (context, index) => Divider(height: 1, indent: 80, color: isDark ? Colors.white10 : Colors.black12),
                 itemBuilder: (context, index) {
-                  final Map<String, dynamic> chat = activeChats[index];
-                  final int unreadCount = viewModel.getUnreadCountForChat(chat['id'].toString());
+                  final rawChat = activeChats[index];
+
+                  final String incidenciaId;
+                  final String titulo;
+                  final String ultimoMensaje;
+
+                  if (rawChat is Chat) {
+                    incidenciaId = rawChat.incidenciaId.toString();
+                    titulo = rawChat.titulo ?? 'Incidencia de Soporte';
+                    ultimoMensaje = rawChat.ultimoMensaje ?? 'Toca para abrir la conversación...';
+                  } else if (rawChat is Map<String, dynamic>) {
+                    incidenciaId = (rawChat['incidenciaId'] ?? rawChat['id'] ?? '').toString();
+                    titulo = rawChat['titulo']?.toString() ?? 'Incidencia de Soporte';
+                    ultimoMensaje = rawChat['ultimoMensaje']?.toString() ?? 'Toca para abrir la conversación...';
+                  } else {
+                    incidenciaId = rawChat.toString();
+                    titulo = 'Incidencia de Soporte';
+                    ultimoMensaje = 'Toca para abrir la conversación...';
+                  }
+
+                  final int unreadCount = viewModel.getUnreadCountForChat(incidenciaId);
 
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                     onTap: () {
                       final reportToChat = Report(
-                        id: chat['id'].toString(),
-                        title: chat['titulo'] ?? 'Incidencia de Soporte',
-                        classroom: chat['aula'] ?? 'Sin ubicación',
+                        id: incidenciaId,
+                        title: titulo,
+                        classroom: 'Sin ubicación',
                         building: '',
                         dateTime: DateTime.now(),
                         details: '',
@@ -92,7 +112,7 @@ class SharedChatsTab extends StatelessWidget {
                       child: const Icon(Icons.support_agent_rounded, color: AppTheme.primaryColor, size: 28),
                     ),
                     title: Text(
-                      chat['titulo']?.toString() ?? 'Incidencia de Soporte',
+                      titulo,
                       style: TextStyle(fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -100,7 +120,7 @@ class SharedChatsTab extends StatelessWidget {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 4.0),
                       child: Text(
-                        'Toca para abrir la conversación...',
+                        ultimoMensaje,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
