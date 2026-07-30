@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import '../../widgets/agora_network_image.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,7 @@ import '../../../../data/models/user.dart';
 import '../../../../data/models/chat.dart';
 import '../../../../data/models/chat_message.dart';
 import '../../../../data/services/chat_service.dart';
+import '../../../../data/services/chat_websocket_service.dart';
 import '../../../../data/services/auth_service.dart';
 import '../../../core/theme.dart';
 import '../../students/view_models/student_dashboard_view_model.dart';
@@ -56,6 +58,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
   List<Message> _messages = [];
   bool _isLoading = true;
   bool _isTyping = false;
+  StreamSubscription? _wsSubscription;
   
   late ReportStatus _currentReportStatus;
   final _picker = ImagePicker();
@@ -80,10 +83,47 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
   @override
   void dispose() {
+    final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
+    final incidenciaId = int.tryParse(incidenciaIdStr);
+    if (incidenciaId != null) {
+      ChatWebSocketService().leaveRoom(incidenciaId);
+    }
+    _wsSubscription?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _setupWebSocket(String token, int incidenciaId) {
+    final ws = ChatWebSocketService();
+    ws.connect(token);
+    ws.joinRoom(incidenciaId);
+
+    _wsSubscription?.cancel();
+    _wsSubscription = ws.stream.listen((data) {
+      if (data['type'] == 'new_message' && data['incidenciaId'] == incidenciaId) {
+        final rawMsg = data['mensaje'];
+        if (rawMsg != null && rawMsg is Map<String, dynamic>) {
+          final chatMsg = ChatMessage.fromJson(rawMsg);
+          final parsedMsg = _parseChatMessage(chatMsg);
+
+          if (mounted) {
+            setState(() {
+              final exists = _messages.any((m) =>
+                m.text == parsedMsg.text &&
+                m.isOutgoing == parsedMsg.isOutgoing &&
+                m.time.difference(parsedMsg.time).inSeconds.abs() < 5
+              );
+              if (!exists) {
+                _messages.add(parsedMsg);
+              }
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+          }
+        }
+      }
+    });
   }
 
   // --- 1. CARGAR DATOS DESDE LA API ---
@@ -94,6 +134,8 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
       final incidenciaIdStr = widget.report.incidenciaId ?? widget.report.id;
       final incidenciaId = int.parse(incidenciaIdStr);
+
+      _setupWebSocket(token, incidenciaId);
 
       // 1. Cargar Mensajes
       final chatData = await _chatService.getChatDetail(token, incidenciaId);
