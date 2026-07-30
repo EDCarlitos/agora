@@ -460,12 +460,14 @@ class _CreateReportBottomSheetState extends State<CreateReportBottomSheet> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    final safeBottomPadding = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 20;
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF261D16) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, safeBottomPadding),
       child: SingleChildScrollView(
         child: Form(
           key: _formKey,

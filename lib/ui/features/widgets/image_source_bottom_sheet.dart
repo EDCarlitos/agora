@@ -11,36 +11,40 @@ class ImageSourceBottomSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF261D16) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38, height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.black12, borderRadius: BorderRadius.circular(2)),
-              ),
-              Text(
-                'Seleccionar Origen de Imagen', 
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppTheme.secondaryColor)
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildOption(context, Icons.camera_alt_rounded, 'Cámara', AppTheme.primaryColor, ImageSource.camera),
-                  _buildOption(context, Icons.photo_library_rounded, 'Galería', Colors.blue, ImageSource.gallery),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPadding),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF261D16) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38, height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.black12, borderRadius: BorderRadius.circular(2)),
+            ),
+            Text(
+              'Seleccionar Origen de Imagen', 
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppTheme.secondaryColor)
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildOption(context, Icons.camera_alt_rounded, 'Cámara', AppTheme.primaryColor, ImageSource.camera),
+                _buildOption(context, Icons.photo_library_rounded, 'Galería', Colors.blue, ImageSource.gallery),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
       },
     );
   }
