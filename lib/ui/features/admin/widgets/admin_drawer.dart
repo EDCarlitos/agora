@@ -131,18 +131,26 @@ class AdminDrawer extends StatelessWidget {
           ),
           const Divider(),
           const Spacer(),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: AppTheme.errorColor),
-            title: const Text(
-              'Cerrar Sesión',
-              style: TextStyle(color: AppTheme.errorColor, fontWeight: FontWeight.bold),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12.0, left: 8.0, right: 8.0),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                leading: const Icon(Icons.logout_rounded, color: AppTheme.errorColor),
+                title: const Text(
+                  'Cerrar Sesión',
+                  style: TextStyle(color: AppTheme.errorColor, fontWeight: FontWeight.bold),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleLogout(context);
+                },
+              ),
             ),
-            onTap: () {
-              Navigator.pop(context);
-              _handleLogout(context);
-            },
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
