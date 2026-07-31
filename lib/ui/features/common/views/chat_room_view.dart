@@ -19,6 +19,7 @@ import '../../widgets/message_bubble.dart';
 import '../../system/view_models/systems_dashboard_view_model.dart';
 
 class Message {
+  final int? id;
   final String text;
   final bool isOutgoing;
   final DateTime time;
@@ -26,6 +27,7 @@ class Message {
   final bool isSystem;
 
   Message({
+    this.id,
     required this.text,
     required this.isOutgoing,
     required this.time,
@@ -95,6 +97,21 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     super.dispose();
   }
 
+  void _addMessageIfNotExists(Message parsedMsg) {
+    final exists = _messages.any((m) {
+      if (parsedMsg.id != null && m.id != null) {
+        return m.id == parsedMsg.id;
+      }
+      return m.text == parsedMsg.text &&
+          m.imageUrl == parsedMsg.imageUrl &&
+          m.isOutgoing == parsedMsg.isOutgoing &&
+          m.time.difference(parsedMsg.time).inSeconds.abs() < 5;
+    });
+    if (!exists) {
+      _messages.add(parsedMsg);
+    }
+  }
+
   void _setupWebSocket(String token, int incidenciaId) {
     final ws = ChatWebSocketService();
     ws.connect(token);
@@ -110,14 +127,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
 
           if (mounted) {
             setState(() {
-              final exists = _messages.any((m) =>
-                m.text == parsedMsg.text &&
-                m.isOutgoing == parsedMsg.isOutgoing &&
-                m.time.difference(parsedMsg.time).inSeconds.abs() < 5
-              );
-              if (!exists) {
-                _messages.add(parsedMsg);
-              }
+              _addMessageIfNotExists(parsedMsg);
             });
             WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
           }
@@ -173,6 +183,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       }
     }
   }
+
   // Mapea el modelo ChatMessage a nuestra clase Message de la vista
   Message _parseChatMessage(ChatMessage m) {
     final enviadoPor = m.enviadoPor;
@@ -180,6 +191,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
     final isImagen = m.tipo == 'imagen';
 
     return Message(
+      id: m.id,
       text: isImagen ? '' : m.mensaje,
       imageUrl: isImagen ? m.mensaje : null,
       isOutgoing: isOutgoing,
@@ -223,7 +235,7 @@ class _ChatRoomViewState extends State<ChatRoomView> {
       );
 
       setState(() {
-        _messages.add(_parseChatMessage(newMsg));
+        _addMessageIfNotExists(_parseChatMessage(newMsg));
         _isTyping = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());

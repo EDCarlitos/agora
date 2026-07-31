@@ -47,6 +47,7 @@ class Report {
   final ReportStatus status;
   final String reportedBy;
   final String? imageUrl;
+  final List<String> imageUrls;
   final String? evidenceUrl;
 
   const Report({
@@ -61,6 +62,7 @@ class Report {
     required this.status,
     required this.reportedBy,
     this.imageUrl,
+    this.imageUrls = const [],
     this.evidenceUrl,
   });
 
@@ -70,6 +72,24 @@ class Report {
     final edificio = aula['edificio'] ?? {};
     final reportante = json['reportante'] ?? {};
     final imagenes = json['imagenes'] as List? ?? [];
+    
+    List<String> parsedUrls = [];
+    for (var img in imagenes) {
+      if (img is String && img.isNotEmpty) {
+        parsedUrls.add(img);
+      } else if (img is Map && img['url'] != null) {
+        parsedUrls.add(img['url'].toString());
+      }
+    }
+
+    if (parsedUrls.isEmpty && json['imageUrl'] != null && json['imageUrl'].toString().isNotEmpty) {
+      final imgStr = json['imageUrl'].toString();
+      if (imgStr.contains(',')) {
+        parsedUrls = imgStr.split(',').where((s) => s.isNotEmpty).toList();
+      } else {
+        parsedUrls = [imgStr];
+      }
+    }
 
     ReportStatus parsedStatus = ReportStatus.pendiente;
     if (json['estado'] == 'ACEPTADO') parsedStatus = ReportStatus.enProceso;
@@ -108,7 +128,8 @@ class Report {
       details: json['descripcion'] ?? 'Sin detalles',
       status: parsedStatus, // <-- Usamos el status corregido
       reportedBy: reportante['username'] ?? reportante['email'] ?? 'Usuario',
-      imageUrl: imagenes.isNotEmpty ? imagenes[0]['url'] : null,
+      imageUrl: parsedUrls.isNotEmpty ? parsedUrls.first : null,
+      imageUrls: parsedUrls,
       evidenceUrl: evidenciaUrl, 
     );
   }
@@ -138,6 +159,7 @@ class Report {
     ReportStatus? status,
     String? reportedBy,
     String? imageUrl,
+    List<String>? imageUrls,
     String? evidenceUrl,
   }) {
     return Report(
@@ -152,6 +174,7 @@ class Report {
       status: status ?? this.status,
       reportedBy: reportedBy ?? this.reportedBy,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
       evidenceUrl: evidenceUrl ?? this.evidenceUrl,
     );
   }

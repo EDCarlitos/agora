@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 class AgoraNetworkImage extends StatelessWidget {
@@ -19,10 +20,11 @@ class AgoraNetworkImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
 
-    return ClipRRect(
-      borderRadius: borderRadius ?? BorderRadius.circular(12),
-      child: Image.network(
+    Widget imageWidget;
+    if (isNetwork) {
+      imageWidget = Image.network(
         imageUrl,
         height: height,
         width: width,
@@ -50,7 +52,31 @@ class AgoraNetworkImage extends StatelessWidget {
             ),
           );
         },
-      ),
+      );
+    } else {
+      imageWidget = Image.file(
+        File(imageUrl),
+        height: height,
+        width: width,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: height ?? 150,
+            width: width ?? double.infinity,
+            color: isDark ? Colors.black12 : Colors.grey.shade200,
+            child: Icon(
+              Icons.image_not_supported_rounded,
+              color: Colors.grey.shade400,
+              size: 40,
+            ),
+          );
+        },
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(12),
+      child: imageWidget,
     );
   }
 }

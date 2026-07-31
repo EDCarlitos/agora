@@ -228,8 +228,8 @@ Future<void> markChatNotificationsAsRead(String incidenciaId) async {
           details: details,
           status: ReportStatus.pendiente,
           reportedBy: reportedBy,
-          // Guardamos las rutas de las fotos separadas por comas
-          imageUrl: imagePaths.isNotEmpty ? imagePaths.join(',') : null, 
+          imageUrl: imagePaths.isNotEmpty ? imagePaths.join(',') : null,
+          imageUrls: imagePaths,
           area: ReportArea.sistema,
         );
         

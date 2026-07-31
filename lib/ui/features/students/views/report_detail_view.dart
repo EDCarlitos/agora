@@ -31,11 +31,19 @@ class _ReportDetailViewState extends State<ReportDetailView> {
   final _picker = ImagePicker();
   final _cloudinaryService = CloudinaryService();
   final _viewModel = StudentDashboardViewModel();
+  int _currentImageIndex = 0;
+  final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
     _currentReport = widget.report;
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   void _resolveReport() async {
@@ -96,7 +104,8 @@ class _ReportDetailViewState extends State<ReportDetailView> {
       }
     }
   }
-@override
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -121,6 +130,12 @@ class _ReportDetailViewState extends State<ReportDetailView> {
     final isRejected = _currentReport.status == ReportStatus.rechazado; // <-- NUEVA
     final isMyReport = _currentReport.reportedBy == widget.currentUser.name || _currentReport.reportedBy == widget.currentUser.email;
     final showActionPanel = isStaff || isMyReport;
+
+    final allImages = _currentReport.imageUrls.isNotEmpty
+        ? _currentReport.imageUrls
+        : (_currentReport.imageUrl != null && _currentReport.imageUrl!.isNotEmpty
+            ? _currentReport.imageUrl!.split(',').where((s) => s.isNotEmpty).toList()
+            : <String>[]);
 
     return Scaffold(
       backgroundColor: canvasBg,
@@ -152,18 +167,77 @@ class _ReportDetailViewState extends State<ReportDetailView> {
                 SizedBox(
                   height: 240,
                   width: double.infinity,
-                  child: _currentReport.imageUrl == null
+                  child: allImages.isEmpty
                       ? Container(
                           color: isDark ? AppTheme.darkSurface : AppTheme.offWhite,
                           child: Center(
                             child: Icon(Icons.image_not_supported_rounded, size: 48, color: Colors.grey.shade400),
                           ),
                         )
-                      : AgoraNetworkImage(
-                          imageUrl: _currentReport.imageUrl!,
-                          height: 240,
-                          width: double.infinity,
-                          borderRadius: BorderRadius.zero, 
+                      : Stack(
+                          children: [
+                            PageView.builder(
+                              controller: _pageController,
+                              itemCount: allImages.length,
+                              onPageChanged: (index) {
+                                setState(() {
+                                  _currentImageIndex = index;
+                                });
+                              },
+                              itemBuilder: (context, index) {
+                                return AgoraNetworkImage(
+                                  imageUrl: allImages[index],
+                                  height: 240,
+                                  width: double.infinity,
+                                  borderRadius: BorderRadius.zero,
+                                );
+                              },
+                            ),
+                            if (allImages.length > 1) ...[
+                              Positioned(
+                                top: 12,
+                                right: 16,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.6),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_currentImageIndex + 1}/${allImages.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 28,
+                                left: 0,
+                                right: 0,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(
+                                    allImages.length,
+                                    (index) => AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                                      width: _currentImageIndex == index ? 16 : 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: _currentImageIndex == index
+                                            ? Colors.white
+                                            : Colors.white.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                 ),
                 Container(

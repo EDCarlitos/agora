@@ -114,7 +114,7 @@ class LocalDatabaseService {
       'details': report.details,
       'status': report.status.name,
       'reportedBy': report.reportedBy,
-      'imageUrl': report.imageUrl,
+      'imageUrl': report.imageUrls.isNotEmpty ? report.imageUrls.join(',') : report.imageUrl,
       'evidenceUrl': report.evidenceUrl,
     };
   }
@@ -124,6 +124,11 @@ class LocalDatabaseService {
     final areaEnum = areaString != null
         ? ReportArea.values.firstWhere((e) => e.name == areaString)
         : null;
+
+    final rawImg = map['imageUrl'] as String?;
+    final List<String> parsedImgs = (rawImg != null && rawImg.isNotEmpty)
+        ? rawImg.split(',').where((s) => s.isNotEmpty).toList()
+        : const [];
 
     return Report(
       id: map['id'] as String,
@@ -135,7 +140,8 @@ class LocalDatabaseService {
       details: map['details'] as String,
       status: ReportStatus.values.firstWhere((e) => e.name == map['status']),
       reportedBy: map['reportedBy'] as String,
-      imageUrl: map['imageUrl'] as String?,
+      imageUrl: parsedImgs.isNotEmpty ? parsedImgs.first : null,
+      imageUrls: parsedImgs,
       evidenceUrl: map['evidenceUrl'] as String?,
     );
   }

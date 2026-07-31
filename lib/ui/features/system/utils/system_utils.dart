@@ -7,6 +7,24 @@ class SystemUtils {
     final reportante = json['reportante'] ?? {};
     final imagenes = json['imagenes'] as List? ?? [];
     
+    List<String> parsedUrls = [];
+    for (var img in imagenes) {
+      if (img is String && img.isNotEmpty) {
+        parsedUrls.add(img);
+      } else if (img is Map && img['url'] != null) {
+        parsedUrls.add(img['url'].toString());
+      }
+    }
+
+    if (parsedUrls.isEmpty && json['imageUrl'] != null && json['imageUrl'].toString().isNotEmpty) {
+      final imgStr = json['imageUrl'].toString();
+      if (imgStr.contains(',')) {
+        parsedUrls = imgStr.split(',').where((s) => s.isNotEmpty).toList();
+      } else {
+        parsedUrls = [imgStr];
+      }
+    }
+
     ReportStatus parsedStatus = ReportStatus.pendiente;
     if (json['estado'] == 'ACEPTADO') parsedStatus = ReportStatus.enProceso;
     if (json['estado'] == 'FINALIZADO') parsedStatus = ReportStatus.resuelto;
@@ -28,7 +46,8 @@ class SystemUtils {
       details: json['descripcion'] ?? '',
       status: parsedStatus, // <-- Usamos el status corregido
       reportedBy: reportante['username'] ?? reportante['email'] ?? 'Usuario',
-      imageUrl: imagenes.isNotEmpty ? imagenes[0]['url'] : null,
+      imageUrl: parsedUrls.isNotEmpty ? parsedUrls.first : null,
+      imageUrls: parsedUrls,
       area: ReportArea.sistema,
     );
   }
