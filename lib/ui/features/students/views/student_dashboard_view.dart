@@ -311,6 +311,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       case 0:
         return StudentIncidentsTab(
           viewModel: _viewModel,
+          currentUser: widget.user,
           onShowDetail: _showReportDetail,
           // Corrección: El índice de la pestaña de Chats es 2, no 3.
           onSeeAllChats: () => setState(() => _selectedIndex = 2), 
@@ -331,6 +332,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       default:
         return StudentIncidentsTab(
           viewModel: _viewModel,
+          currentUser: widget.user,
           onShowDetail: _showReportDetail,
           onSeeAllChats: () => setState(() => _selectedIndex = 2),
         );

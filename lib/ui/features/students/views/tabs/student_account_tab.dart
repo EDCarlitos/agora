@@ -5,6 +5,7 @@ import '../../../../core/theme.dart';
 import '../../view_models/student_dashboard_view_model.dart';
 import '../../../widgets/user_profile_header_card.dart';
 import '../../../widgets/custom_buttons.dart';
+import '../../../common/views/all_reports_view.dart';
 
 class StudentAccountTab extends StatelessWidget {
   final StudentDashboardViewModel viewModel;
@@ -39,6 +40,24 @@ class StudentAccountTab extends StatelessWidget {
                 'Mis Reportes Publicados (${myReports.length})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
               ),
+              if (myReports.isNotEmpty)
+                AgoraTextButton(
+                  text: 'Ver todos',
+                  color: AppTheme.primaryColor,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AllReportsView(
+                          title: 'Mis Reportes Publicados',
+                          reports: myReports,
+                          currentUser: currentUser,
+                          onRefresh: () => viewModel.loadReports(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 8),

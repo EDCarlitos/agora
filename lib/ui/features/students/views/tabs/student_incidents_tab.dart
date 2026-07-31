@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import '../../../../../data/models/report.dart';
+import '../../../../../data/models/user.dart';
 import '../../../../core/theme.dart';
 import '../../../widgets/agora_incident_card.dart';
 import '../../view_models/student_dashboard_view_model.dart';
 import '../../../widgets/custom_empty_state.dart';
 import '../../../widgets/custom_buttons.dart';
 import '../../../widgets/agora_network_image.dart';
+import '../../../common/views/all_reports_view.dart';
 
 class StudentIncidentsTab extends StatelessWidget {
   final StudentDashboardViewModel viewModel;
+  final User currentUser;
   final Function(Report) onShowDetail;
   final VoidCallback onSeeAllChats;
 
   const StudentIncidentsTab({
     super.key,
     required this.viewModel,
+    required this.currentUser,
     required this.onShowDetail,
     required this.onSeeAllChats,
   });
@@ -57,7 +61,19 @@ class StudentIncidentsTab extends StatelessWidget {
                       AgoraTextButton(
                         text: 'Ver todos',
                         color: const Color(0xFFFBBF24),
-                        onPressed: onSeeAllChats,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AllReportsView(
+                                title: 'Reportes Recientes',
+                                reports: recentIncidents,
+                                currentUser: currentUser,
+                                onRefresh: () => viewModel.loadReports(),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -84,7 +100,23 @@ class StudentIncidentsTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionHeader('Incidencias de Sistemas'),
+                _buildSectionHeader(
+                  context,
+                  'Incidencias de Sistemas',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AllReportsView(
+                          title: 'Incidencias de Sistemas',
+                          reports: allIncidents,
+                          currentUser: currentUser,
+                          onRefresh: () => viewModel.loadReports(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 8),
                 if (allIncidents.isEmpty)
                   const CustomEmptyState(message: 'No hay reportes activos.', icon: Icons.assignment_outlined)
@@ -102,7 +134,7 @@ class StudentIncidentsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title, {VoidCallback? onTap}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -117,8 +149,8 @@ class StudentIncidentsTab extends StatelessWidget {
         ),
         AgoraTextButton(
           text: 'Ver todos',
-          color: AppTheme.primaryColor.withOpacity(0.8),
-          onPressed: () {},
+          color: AppTheme.primaryColor.withValues(alpha: 0.8),
+          onPressed: onTap ?? () {},
         ),
       ],
     );

@@ -8,6 +8,7 @@ import '../../../widgets/agora_horizontal_incident_card.dart'; // Importamos la 
 import '../../view_models/systems_dashboard_view_model.dart';
 import '../../utils/system_utils.dart';
 import '../../../students/views/report_detail_view.dart';
+import '../../../common/views/all_reports_view.dart';
 
 class SystemsDisponiblesTab extends StatelessWidget {
   final SystemsDashboardViewModel viewModel;
@@ -44,7 +45,24 @@ class SystemsDisponiblesTab extends StatelessWidget {
           const SizedBox(height: 16),
           
           // --- 1. SECCIÓN: REPORTES RECIENTES ---
-          _buildSectionHeader('Reportes Recientes', 'Ver todos', isDark),
+          _buildSectionHeader(
+            'Reportes Recientes',
+            'Ver todos',
+            isDark,
+            onActionTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AllReportsView(
+                    title: 'Reportes Recientes',
+                    reports: recentReports,
+                    currentUser: user,
+                    onRefresh: () => viewModel.loadDashboardData(user),
+                  ),
+                ),
+              );
+            },
+          ),
           SizedBox(
             height: 160,
             child: ListView.builder(
@@ -64,7 +82,24 @@ class SystemsDisponiblesTab extends StatelessWidget {
           const SizedBox(height: 24),
 
           // --- 2. SECCIÓN: INCIDENCIAS PENDIENTES ---
-          _buildSectionHeader('Incidencias pendientes', 'Ver todos', isDark),
+          _buildSectionHeader(
+            'Incidencias pendientes',
+            'Ver todos',
+            isDark,
+            onActionTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AllReportsView(
+                    title: 'Incidencias Pendientes',
+                    reports: reports,
+                    currentUser: user,
+                    onRefresh: () => viewModel.loadDashboardData(user),
+                  ),
+                ),
+              );
+            },
+          ),
           ListView.builder(
             shrinkWrap: true, // Importante para que funcione dentro del SingleChildScrollView
             physics: const NeverScrollableScrollPhysics(), // Evita scroll doble
@@ -104,7 +139,7 @@ class SystemsDisponiblesTab extends StatelessWidget {
   }
 
   // Constructor de encabezados de sección para mantener DRY
-  Widget _buildSectionHeader(String title, String actionText, bool isDark) {
+  Widget _buildSectionHeader(String title, String actionText, bool isDark, {VoidCallback? onActionTap}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
@@ -119,12 +154,19 @@ class SystemsDisponiblesTab extends StatelessWidget {
               color: isDark ? Colors.white : AppTheme.secondaryColor,
             ),
           ),
-          Text(
-            actionText,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor, // Usando el color guinda
+          InkWell(
+            onTap: onActionTap,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Text(
+                actionText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryColor, // Usando el color guinda
+                ),
+              ),
             ),
           ),
         ],
